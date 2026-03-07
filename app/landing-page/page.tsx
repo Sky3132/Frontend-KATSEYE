@@ -1,110 +1,207 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import { useSyncExternalStore } from "react";
+import ThemeToggle from "../components/theme-toggle";
+import { hasStoredAuth } from "../lib/auth";
+import { products } from "../user/lib/products";
 
-const products = [
-  {
-    id: 1,
-    name: "Eclipse Logo Tee",
-    brand: "Eclipse",
-    price: "$28.99",
-    image:
-      "https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?auto=format&fit=crop&w=900&q=80",
-  },
-  {
-    id: 2,
-    name: 'Nova "Galaxy" Tour Hoodie',
-    brand: "Nova",
-    price: "$84.99",
-    image:
-      "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=900&q=80",
-  },
-  {
-    id: 3,
-    name: "Starlight Signature Cap",
-    brand: "Starlight",
-    price: "$22.99",
-    image:
-      "https://images.unsplash.com/photo-1487017159836-4e23ece2e4cf?auto=format&fit=crop&w=900&q=80",
-  },
-];
+const featuredProducts = products.filter((product) => product.category === "cloth").slice(0, 3);
+const bestSaleProducts = products.slice(0, 6);
+const asCurrency = (value: number) => `$${value.toFixed(2)}`;
+const THEME_EVENT = "katseye:theme";
+const THEME_STORAGE_KEY = "katseye-theme";
+
+const subscribeBrowserState = (callback: () => void) => {
+  if (typeof window === "undefined") return () => {};
+
+  const handleChange = () => callback();
+  window.addEventListener(THEME_EVENT, handleChange);
+  window.addEventListener("storage", handleChange);
+
+  return () => {
+    window.removeEventListener(THEME_EVENT, handleChange);
+    window.removeEventListener("storage", handleChange);
+  };
+};
+
+const getThemeSnapshot = () => {
+  if (typeof window === "undefined") return false;
+  return window.localStorage.getItem(THEME_STORAGE_KEY) === "dark";
+};
+
+const getAuthSnapshot = () => {
+  if (typeof window === "undefined") return false;
+  return hasStoredAuth();
+};
 
 export default function LandingPage() {
   const router = useRouter();
+  const isSignedIn = useSyncExternalStore(subscribeBrowserState, getAuthSnapshot, () => false);
+  const isDarkTheme = useSyncExternalStore(subscribeBrowserState, getThemeSnapshot, () => false);
 
   return (
-    <main className="min-h-screen bg-[#f8f8f8] text-[#121212]">
-      <header className="sticky top-0 z-10 flex h-20 items-center justify-between border-b border-neutral-200 bg-white px-6">
+    <main className="min-h-screen bg-[#f8f8f8] text-[#121212] transition-colors dark:bg-[#090909] dark:bg-[radial-gradient(circle_at_top,rgba(112,95,25,0.14),transparent_20%),linear-gradient(180deg,#080808_0%,#0c0c0b_100%)] dark:text-[#f1d04b]">
+      <header className="fixed inset-x-0 top-0 z-20 flex h-20 items-center justify-between border-b border-white/15 bg-black/25 px-6 backdrop-blur-md dark:border-[#2f2a16] dark:bg-[linear-gradient(180deg,rgba(4,4,4,0.95)_0%,rgba(13,13,12,0.88)_100%)]">
         <div className="flex items-center gap-3">
-          <span className="flex h-10 w-10 items-center justify-center rounded-full bg-black text-sm font-semibold text-white">
-            KK
+          <img
+            src={isDarkTheme ? "/black logo.jpg" : "/logo.png"}
+            alt="Katseye logo"
+            className="h-11 w-11 rounded-full object-cover"
+          />
+          <span className="text-3xl font-semibold text-white">
+            Katseye Klothes
           </span>
-          <span className="text-3xl font-semibold">Katseye Klothes</span>
         </div>
         <div className="flex items-center gap-3">
-          <button
-            className="rounded-xl border border-neutral-300 px-5 py-2 text-xl"
-            type="button"
-            onClick={() => router.push("/login")}
-          >
-            Log In
-          </button>
-          <button
-            className="rounded-xl bg-black px-5 py-2 text-xl text-white"
-            type="button"
-            onClick={() => router.push("/login/register")}
-          >
-            Sign Up
-          </button>
-          <span className="rounded-full border border-neutral-300 px-4 py-2 text-sm font-semibold uppercase tracking-[0.24em]">
-            Cart
-          </span>
+          <ThemeToggle className="border-white/20 bg-white/10 text-white hover:border-white/35 dark:border-[#d9b92f] dark:bg-[#080808] dark:text-[#f1d04b]" />
+          {isSignedIn ? null : (
+            <>
+              <button
+                className="rounded-xl border border-white/35 px-5 py-2 text-xl text-white dark:border-[#f1d04b]/30 dark:text-[#f1d04b]"
+                type="button"
+                onClick={() => router.push("/login")}
+              >
+                Log In
+              </button>
+              <button
+                className="rounded-xl bg-white px-5 py-2 text-xl font-semibold text-black dark:bg-[#f1d04b] dark:text-[#090909]"
+                type="button"
+                onClick={() => router.push("/login/register")}
+              >
+                Sign Up
+              </button>
+            </>
+          )}
         </div>
       </header>
 
-      <section
-        className="relative flex h-[560px] items-center justify-center bg-no-repeat px-6"
-        style={{
-          backgroundImage:
-            "linear-gradient(rgba(0,0,0,0.42), rgba(0,0,0,0.42)), url('https://d1ef7ke0x2i9g8.cloudfront.net/hong-kong/_large700/5695725/KATSEYE-x-Gap.webp')",
-          backgroundSize: "cover",
-          backgroundPosition: "center center",
-        }}
-      >
-        <div className="max-w-4xl text-center text-white">
-          <h1 className="text-7xl font-semibold tracking-tight">Style the Vision</h1>
-          <p className="mt-5 text-3xl leading-relaxed text-neutral-100">
-            Discover the exclusive collection of Katseye apparel, accessories, and more.
-            Wear the moment.
-          </p>
-          <button
-            className="mt-8 rounded-xl bg-black px-10 py-4 text-2xl font-semibold text-white"
-            type="button"
-            onClick={() => router.push("/login")}
-          >
-            Shop The Collection
-          </button>
+      <section className="relative flex min-h-screen items-end overflow-hidden px-6 pb-16 pt-24">
+        <video
+          className="absolute inset-0 h-full w-full object-cover"
+          autoPlay
+          muted
+          loop
+          playsInline
+        >
+          <source
+            src="/ssstik.io_@sooyaditxy_1772893157760.mp4"
+            type="video/mp4"
+          />
+        </video>
+        <div className="absolute inset-0 bg-gradient-to-b from-black/25 via-black/35 to-black/70" />
+
+        <div className="relative mx-auto flex w-full max-w-[1440px] items-end justify-between gap-10">
+          <div className="max-w-4xl text-white">
+            <p className="text-sm font-semibold uppercase tracking-[0.38em] text-white/75">
+              Featured Drop
+            </p>
+            <h1 className="mt-4 text-6xl font-semibold tracking-tight sm:text-7xl xl:text-8xl">
+              Style the Vision
+            </h1>
+            <p className="mt-5 max-w-3xl text-xl leading-relaxed text-neutral-100 sm:text-2xl">
+              Full-screen motion, exclusive drops, and the latest Katseye merch
+              in one place.
+            </p>
+            <div className="mt-8 flex flex-wrap gap-4">
+              <button
+                className="rounded-xl bg-white px-10 py-4 text-xl font-semibold text-black"
+                type="button"
+                onClick={() =>
+                  router.push(isSignedIn ? "/user/products" : "/login")
+                }
+              >
+                Shop The Collection
+              </button>
+              <button
+                className="rounded-xl border border-white/40 px-10 py-4 text-xl font-semibold text-white"
+                type="button"
+                onClick={() =>
+                  document
+                    .getElementById("featured-merch")
+                    ?.scrollIntoView({ behavior: "smooth" })
+                }
+              >
+                View Featured
+              </button>
+            </div>
+          </div>
+
+          <div className="hidden rounded-[28px] border border-white/20 bg-white/10 p-6 text-white backdrop-blur-md lg:block">
+            <p className="text-xs font-semibold uppercase tracking-[0.32em] text-white/70">
+              Katseye Music
+            </p>
+            <p className="mt-3 text-3xl font-semibold">Merches Available</p>
+            <p className="mt-2 max-w-xs text-sm leading-6 text-white/80">
+              Scroll down for featured merch and most-sale products.
+            </p>
+          </div>
         </div>
       </section>
 
-      <section className="mx-auto max-w-[1400px] px-6 py-14">
-        <h2 className="mb-10 text-center text-7xl font-semibold tracking-tight">You might also like</h2>
+      <section
+        id="featured-merch"
+        className="mx-auto max-w-[1400px] px-6 py-16"
+      >
+        <h2 className="mb-10 text-center text-6xl font-semibold tracking-tight">
+          Featured Merch
+        </h2>
         <div className="grid gap-8 md:grid-cols-2 xl:grid-cols-3">
-          {products.map((product) => (
+          {featuredProducts.map((product) => (
             <button
               key={product.id}
-              className="overflow-hidden rounded-2xl border border-neutral-200 bg-white text-left transition hover:-translate-y-1 hover:shadow-xl"
+              className="overflow-hidden rounded-2xl border border-neutral-200 bg-white text-left transition hover:-translate-y-1 hover:shadow-xl dark:border-[#2f2a16] dark:bg-[#090909] dark:shadow-[0_0_0_1px_rgba(217,185,47,0.08)]"
               type="button"
-              onClick={() => router.push("/login")}
+              onClick={() =>
+                router.push(
+                  isSignedIn ? `/user/products/product-details/${product.id}` : "/login",
+                )
+              }
             >
-              <div
-                className="h-[430px] w-full bg-cover bg-center"
-                style={{ backgroundImage: `url('${product.image}')` }}
-              />
+              <div className="flex h-[430px] w-full items-center justify-center bg-[#f3f3f1] p-6 dark:bg-[#2b2b2b]">
+                <img
+                  src={product.image}
+                  alt={product.name}
+                  className="h-full w-full object-contain"
+                />
+              </div>
               <div className="space-y-2 p-6">
                 <h3 className="text-4xl font-semibold">{product.name}</h3>
-                <p className="text-2xl text-neutral-500">{product.brand}</p>
-                <p className="text-4xl font-semibold">{product.price}</p>
+                <p className="text-2xl text-neutral-500 dark:text-[#c7ba81]">{product.brand}</p>
+                <p className="text-4xl font-semibold">{asCurrency(product.price)}</p>
+              </div>
+            </button>
+          ))}
+        </div>
+      </section>
+
+      <section id="sale-products" className="mx-auto max-w-[1400px] px-6 pb-20">
+        <h2 className="mb-10 text-center text-6xl font-semibold tracking-tight">
+          Most Sale Products
+        </h2>
+        <div className="grid gap-8 md:grid-cols-2 xl:grid-cols-3">
+          {bestSaleProducts.map((product) => (
+            <button
+              key={product.id}
+              className="overflow-hidden rounded-2xl border border-neutral-200 bg-white text-left transition hover:-translate-y-1 hover:shadow-xl dark:border-[#2f2a16] dark:bg-[#090909] dark:shadow-[0_0_0_1px_rgba(217,185,47,0.08)]"
+              type="button"
+              onClick={() =>
+                router.push(
+                  isSignedIn ? `/user/products/product-details/${product.id}` : "/login",
+                )
+              }
+            >
+              <div className="flex h-[430px] w-full items-center justify-center bg-[#f3f3f1] p-6 dark:bg-[#2b2b2b]">
+                <img
+                  src={product.image}
+                  alt={product.name}
+                  className="h-full w-full object-contain"
+                />
+              </div>
+              <div className="space-y-2 p-6">
+                <h3 className="text-4xl font-semibold">{product.name}</h3>
+                <p className="text-2xl text-neutral-500 dark:text-[#c7ba81]">{product.brand}</p>
+                <p className="text-4xl font-semibold">{asCurrency(product.price)}</p>
               </div>
             </button>
           ))}

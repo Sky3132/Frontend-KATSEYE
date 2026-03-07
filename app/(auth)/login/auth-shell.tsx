@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState, type ReactNode } from "react";
+import ThemeToggle from "../../components/theme-toggle";
 
 const slides = [
   {
@@ -54,6 +55,30 @@ type AuthShellProps = {
   children: ReactNode;
 };
 
+const socialProviders = [
+  {
+    id: "gmail",
+    label: "Gmail",
+    content: (
+      <svg
+        aria-hidden="true"
+        viewBox="0 0 24 24"
+        className="h-[18px] w-[18px]"
+        fill="none"
+        xmlns="http://www.w3.org/2000/svg"
+      >
+        <path d="M3.75 6.75L12 13.5L20.25 6.75" stroke="#EA4335" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+        <path d="M4.5 7.5V18H8.25V11.25L12 14.25L15.75 11.25V18H19.5V7.5" stroke="#4285F4" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+        <path d="M4.5 18V7.5L8.25 10.5V18" stroke="#34A853" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+        <path d="M19.5 18V7.5L15.75 10.5V18" stroke="#FBBC05" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    ),
+  },
+  { id: "apple", label: "Apple", content: "A" },
+  { id: "facebook", label: "Facebook", content: "F" },
+  { id: "x", label: "X", content: "X" },
+] as const;
+
 export default function AuthShell({
   activeTab,
   title,
@@ -76,19 +101,22 @@ export default function AuthShell({
   }, []);
 
   return (
-    <main className="min-h-screen bg-[#f3f3f1] px-4 py-4 text-[#121212] sm:px-6 lg:px-8">
-      <div className="mx-auto flex h-[calc(100vh-2rem)] w-full max-w-[1560px] rounded-[32px] border border-black/10 bg-[#efefeb] p-3 shadow-[0_30px_80px_rgba(0,0,0,0.08)]">
-        <section className="flex w-full flex-col overflow-y-auto rounded-[28px] border border-black/10 bg-[#f8f8f5] px-6 py-6 sm:px-10 lg:w-[48%] lg:px-12 lg:py-8">
-          <div className="flex items-center gap-3">
-            <span className="flex h-10 w-10 items-center justify-center rounded-full bg-black text-sm font-semibold tracking-[0.28em] text-white">
+    <main className="min-h-screen bg-[#f3f3f1] px-4 py-4 text-[#121212] transition-colors dark:bg-[#090909] dark:bg-[radial-gradient(circle_at_top,rgba(112,95,25,0.14),transparent_20%),linear-gradient(180deg,#080808_0%,#0c0c0b_100%)] dark:text-[#f1d04b] sm:px-6 lg:px-8">
+      <div className="mx-auto flex h-[calc(100vh-2rem)] w-full max-w-[1560px] rounded-[32px] border border-black/10 bg-[#efefeb] p-3 shadow-[0_30px_80px_rgba(0,0,0,0.08)] transition-colors dark:border-[#2f2a16] dark:bg-[#0b0b0a]">
+        <section className="flex w-full flex-col overflow-y-auto rounded-[28px] border border-black/10 bg-[#f8f8f5] px-6 py-6 transition-colors dark:border-[#2f2a16] dark:bg-[#090909] sm:px-10 lg:w-[48%] lg:px-12 lg:py-8">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+            <span className="flex h-10 w-10 items-center justify-center rounded-full bg-black text-sm font-semibold tracking-[0.28em] text-white dark:bg-[#f1d04b] dark:text-[#090909]">
               KK
             </span>
             <div>
-              <p className="text-sm font-semibold uppercase tracking-[0.3em] text-black/55">
+              <p className="text-sm font-semibold uppercase tracking-[0.3em] text-black/55 dark:text-[#b59b39]">
                 Katseye
               </p>
               <h1 className="text-xl font-semibold tracking-[-0.02em]">Katseye Klothes</h1>
             </div>
+            </div>
+            <ThemeToggle />
           </div>
 
           <div className="mx-auto flex w-full max-w-[430px] flex-1 flex-col justify-center py-8">
@@ -96,14 +124,14 @@ export default function AuthShell({
               <h2 className="text-4xl font-semibold tracking-[-0.03em] text-black sm:text-5xl">
                 {title}
               </h2>
-              <p className="mt-4 text-base leading-7 text-black/55 sm:text-lg">{description}</p>
+              <p className="mt-4 text-base leading-7 text-black/55 dark:text-[#c7ba81] sm:text-lg">{description}</p>
             </div>
 
-            <div className="mt-8 grid grid-cols-2 rounded-2xl border border-black/10 bg-white p-1 text-sm font-medium">
+            <div className="mt-8 grid grid-cols-2 rounded-2xl border border-black/10 bg-white p-1 text-sm font-medium dark:border-[#2f2a16] dark:bg-[#141412]">
               <Link
                 href="/login"
                 className={`rounded-[14px] px-4 py-3 text-center transition ${
-                  activeTab === "login" ? "bg-[#121212] text-white" : "text-black/55"
+                  activeTab === "login" ? "bg-[#121212] text-white dark:bg-[#f1d04b] dark:text-[#090909]" : "text-black/55 dark:text-[#c7ba81]"
                 }`}
               >
                 Sign In
@@ -111,7 +139,7 @@ export default function AuthShell({
               <Link
                 href="/login/register"
                 className={`rounded-[14px] px-4 py-3 text-center transition ${
-                  activeTab === "register" ? "bg-[#121212] text-white" : "text-black/55"
+                  activeTab === "register" ? "bg-[#121212] text-white dark:bg-[#f1d04b] dark:text-[#090909]" : "text-black/55 dark:text-[#c7ba81]"
                 }`}
               >
                 Sign Up
@@ -122,7 +150,7 @@ export default function AuthShell({
               {children}
 
               <button
-                className="mt-2 h-14 w-full rounded-2xl bg-[#121212] text-base font-semibold text-white transition hover:bg-black disabled:cursor-not-allowed disabled:opacity-70"
+                className="mt-2 h-14 w-full rounded-2xl bg-[#121212] text-base font-semibold text-white transition hover:bg-black disabled:cursor-not-allowed disabled:opacity-70 dark:bg-[#f1d04b] dark:text-[#090909] dark:hover:bg-[#f7db63]"
                 type="submit"
                 disabled={isSubmitting}
               >
@@ -134,26 +162,27 @@ export default function AuthShell({
             {successMessage ? <p className="mt-4 text-sm text-green-700">{successMessage}</p> : null}
 
             <div className="mt-8">
-              <div className="flex items-center gap-3 text-sm text-black/40">
-                <span className="h-px flex-1 bg-black/10" />
+              <div className="flex items-center gap-3 text-sm text-black/40 dark:text-[#9f9156]">
+                <span className="h-px flex-1 bg-black/10 dark:bg-[#f1d04b]/15" />
                 <span>Continue with</span>
-                <span className="h-px flex-1 bg-black/10" />
+                <span className="h-px flex-1 bg-black/10 dark:bg-[#f1d04b]/15" />
               </div>
 
               <div className="mt-5 flex items-center justify-center gap-4">
-                {["G", "A", "F", "X"].map((provider) => (
+                {socialProviders.map((provider) => (
                   <button
-                    key={provider}
+                    key={provider.id}
                     type="button"
-                    className="flex h-11 w-11 items-center justify-center rounded-2xl border border-black/10 bg-white text-sm font-semibold text-black transition hover:border-black/25"
+                    aria-label={`Continue with ${provider.label}`}
+                    className="flex h-11 w-11 items-center justify-center rounded-2xl border border-black/10 bg-white text-sm font-semibold text-black transition hover:border-black/25 dark:border-[#2f2a16] dark:bg-[#11110f] dark:text-[#f1d04b]"
                   >
-                    {provider}
+                    {provider.content}
                   </button>
                 ))}
               </div>
             </div>
 
-            <div className="mt-10 flex flex-wrap items-center justify-between gap-3 text-xs text-black/45">
+            <div className="mt-10 flex flex-wrap items-center justify-between gap-3 text-xs text-black/45 dark:text-[#9f9156]">
               <span>Copyright 2026 Katseye. All rights reserved.</span>
               <div className="flex items-center gap-4">
                 <span>Terms &amp; Conditions</span>

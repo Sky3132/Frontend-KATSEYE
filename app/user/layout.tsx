@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import AppFooter from "./components/app-footer";
 import UserAuthGuard from "./components/user-auth-guard";
 
 type UserLayoutProps = {
@@ -6,5 +7,10 @@ type UserLayoutProps = {
 };
 
 export default function UserLayout({ children }: UserLayoutProps) {
-  return <UserAuthGuard>{children}</UserAuthGuard>;
+  return (
+    <UserAuthGuard>
+      {children}
+      <AppFooter />
+    </UserAuthGuard>
+  );
 }
