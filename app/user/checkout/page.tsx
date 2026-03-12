@@ -99,6 +99,68 @@ export default function CheckoutPage() {
   const tax = subtotal * 0.08;
   const total = subtotal + shippingFee + tax;
   const selectedAddress = addresses.find((address) => address.id === selectedAddressId) ?? null;
+  const isPhilippines = shipping.country === "Philippines";
+  const [externalRegions, setExternalRegions] = useState<string[]>([]);
+  const [externalCities, setExternalCities] = useState<string[]>([]);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    const loadRegions = async () => {
+      if (!shipping.country || isPhilippines) {
+        setExternalRegions([]);
+        return;
+      }
+      try {
+        const response = await fetch("https://countriesnow.space/api/v0.1/countries/states", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ country: shipping.country }),
+          signal: controller.signal,
+        });
+        const json: unknown = await response.json();
+        const states = (json as { data?: { states?: { name?: string }[] } })?.data?.states ?? [];
+        setExternalRegions(
+          states
+            .map((state) => state?.name)
+            .filter((name): name is string => typeof name === "string" && name.trim().length > 0),
+        );
+      } catch {
+        setExternalRegions([]);
+      }
+    };
+
+    void loadRegions();
+    return () => controller.abort();
+  }, [isPhilippines, shipping.country]);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    const loadCities = async () => {
+      if (!shipping.country || isPhilippines || !shipping.region) {
+        setExternalCities([]);
+        return;
+      }
+      try {
+        const response = await fetch("https://countriesnow.space/api/v0.1/countries/state/cities", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ country: shipping.country, state: shipping.region }),
+          signal: controller.signal,
+        });
+        const json: unknown = await response.json();
+        const cities = (json as { data?: string[] })?.data ?? [];
+        setExternalCities(
+          cities.filter((name): name is string => typeof name === "string" && name.trim().length > 0),
+        );
+      } catch {
+        setExternalCities([]);
+      }
+    };
+
+    void loadCities();
+    return () => controller.abort();
+  }, [isPhilippines, shipping.country, shipping.region]);
+
   const regionOptions = useMemo(() => getRegionOptions(shipping.country), [shipping.country]);
   const provinceOptions = useMemo(
     () => getProvinceOptions(shipping.country, shipping.region),
@@ -538,11 +600,12 @@ export default function CheckoutPage() {
                         <select
                           value={shipping.country}
                           onChange={(event) => {
-                            updateField("country", event.target.value);
+                            const nextCountry = event.target.value;
+                            updateField("country", nextCountry);
                             updateField("region", "");
-                            updateField("province", "");
+                            updateField("province", nextCountry === "Philippines" ? "" : "N/A");
                             updateField("city", "");
-                            updateField("barangay", "");
+                            updateField("barangay", nextCountry === "Philippines" ? "" : "N/A");
                           }}
                           className={shipping.country ? selectClassName : placeholderSelectClassName}
                         >
@@ -558,10 +621,11 @@ export default function CheckoutPage() {
                         <select
                           value={shipping.region}
                           onChange={(event) => {
-                            updateField("region", event.target.value);
-                            updateField("province", "");
+                            const nextRegion = event.target.value;
+                            updateField("region", nextRegion);
+                            updateField("province", isPhilippines ? "" : "N/A");
                             updateField("city", "");
-                            updateField("barangay", "");
+                            updateField("barangay", isPhilippines ? "" : "N/A");
                           }}
                           className={shipping.region ? selectClassName : placeholderSelectClassName}
                           disabled={!shipping.country}
@@ -569,7 +633,7 @@ export default function CheckoutPage() {
                           <option value="" disabled hidden>
                             Region
                           </option>
-                          {regionOptions.map((region) => (
+                          {(isPhilippines ? regionOptions : externalRegions).map((region) => (
                             <option key={region} value={region}>
                               {region}
                             </option>
@@ -580,33 +644,39 @@ export default function CheckoutPage() {
                           onChange={(event) => {
                             updateField("province", event.target.value);
                             updateField("city", "");
-                            updateField("barangay", "");
+                            updateField("barangay", isPhilippines ? "" : shipping.barangay || "N/A");
                           }}
                           className={shipping.province ? selectClassName : placeholderSelectClassName}
-                          disabled={!shipping.region && shipping.country === "Philippines"}
+                          disabled={isPhilippines ? !shipping.region : true}
                         >
                           <option value="" disabled hidden>
                             Province
                           </option>
-                          {provinceOptions.map((province) => (
-                            <option key={province} value={province}>
-                              {province}
-                            </option>
-                          ))}
+                          {isPhilippines ? (
+                            provinceOptions.map((province) => (
+                              <option key={province} value={province}>
+                                {province}
+                              </option>
+                            ))
+                          ) : (
+                            <>
+                              <option value="N/A">N/A</option>
+                            </>
+                          )}
                         </select>
                         <select
                           value={shipping.city}
                           onChange={(event) => {
                             updateField("city", event.target.value);
-                            updateField("barangay", "");
+                            updateField("barangay", isPhilippines ? "" : shipping.barangay || "N/A");
                           }}
                           className={shipping.city ? selectClassName : placeholderSelectClassName}
-                          disabled={!shipping.province && shipping.country === "Philippines"}
+                          disabled={isPhilippines ? !shipping.province : !shipping.region}
                         >
                           <option value="" disabled hidden>
                             {t("city")}
                           </option>
-                          {cityOptions.map((city) => (
+                          {(isPhilippines ? cityOptions : externalCities).map((city) => (
                             <option key={city} value={city}>
                               {city}
                             </option>
@@ -616,16 +686,23 @@ export default function CheckoutPage() {
                           value={shipping.barangay}
                           onChange={(event) => updateField("barangay", event.target.value)}
                           className={shipping.barangay ? selectClassName : placeholderSelectClassName}
-                          disabled={!shipping.city && shipping.country === "Philippines"}
+                          disabled={isPhilippines ? !shipping.city : !shipping.city}
                         >
                           <option value="" disabled hidden>
                             Barangay
                           </option>
-                          {barangayOptions.map((barangay) => (
-                            <option key={barangay} value={barangay}>
-                              {barangay}
-                            </option>
-                          ))}
+                          {isPhilippines ? (
+                            barangayOptions.map((barangay) => (
+                              <option key={barangay} value={barangay}>
+                                {barangay}
+                              </option>
+                            ))
+                          ) : (
+                            <>
+                              <option value="N/A">N/A</option>
+                              <option value="Other">Other</option>
+                            </>
+                          )}
                         </select>
                         <input
                           type="text"

@@ -134,7 +134,7 @@ export default function LandingPage() {
             </p>
             <div className="mt-8 flex flex-wrap gap-4">
               <button
-                className="rounded-xl bg-white px-10 py-4 text-xl font-semibold text-black dark:bg-[#11110f] dark:text-[#f1d04b]"
+                className="rounded-xl bg-white px-10 py-4 text-xl font-semibold text-black shadow-[0_10px_30px_rgba(0,0,0,0.35)] transition hover:bg-neutral-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/25 focus-visible:ring-offset-2 focus-visible:ring-offset-white dark:bg-[#f1d04b] dark:text-[#090909] dark:hover:bg-[#f6dc6a] dark:focus-visible:ring-[#f1d04b]/60 dark:focus-visible:ring-offset-black"
                 type="button"
                 onClick={() => void goToProtected("/user/products")}
               >
