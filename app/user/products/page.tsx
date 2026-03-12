@@ -1,9 +1,11 @@
 "use client";
 
 import CatalogPage from "../components/catalog-page";
-import { products } from "../lib/products";
+import { useLiveProducts } from "../lib/use-live-products";
 
 export default function ProductsPage() {
+  const products = useLiveProducts();
+
   return (
     <CatalogPage
       eyebrow="Curated Catalog"

@@ -11,7 +11,8 @@ import {
   readCart,
   subscribeCart,
 } from "../lib/cart";
-import type { Product } from "../lib/products";
+import type { Product } from "../lib/catalog-api";
+import { useStoreSettings } from "../lib/store-settings";
 
 type CatalogPageProps = {
   eyebrow: string;
@@ -21,8 +22,6 @@ type CatalogPageProps = {
 };
 
 type SortOption = "featured" | "price-low" | "price-high";
-
-const asCurrency = (value: number) => `$${value.toFixed(2)}`;
 
 const statusLabel: Record<Product["status"], string> = {
   available: "Available",
@@ -49,6 +48,7 @@ export default function CatalogPage({
   products,
 }: CatalogPageProps) {
   const router = useRouter();
+  const { formatCurrency, t } = useStoreSettings();
   const cart = useSyncExternalStore(subscribeCart, readCart, getCartServerSnapshot);
   const cartCount = useMemo(() => getCartCount(cart), [cart]);
   const [searchQuery, setSearchQuery] = useState("");
@@ -59,6 +59,8 @@ export default function CatalogPage({
     [products],
   );
   const [priceLimit, setPriceLimit] = useState<number>(maxProductPrice);
+  const [hasTouchedPrice, setHasTouchedPrice] = useState(false);
+  const resolvedPriceLimit = hasTouchedPrice ? priceLimit : maxProductPrice;
 
   const filteredProducts = useMemo(() => {
     const normalizedQuery = searchQuery.trim().toLowerCase();
@@ -68,7 +70,7 @@ export default function CatalogPage({
         !normalizedQuery ||
         product.name.toLowerCase().includes(normalizedQuery) ||
         product.brand.toLowerCase().includes(normalizedQuery);
-      return matchesQuery && product.price <= priceLimit;
+      return matchesQuery && product.price <= resolvedPriceLimit;
     });
 
     if (sortBy === "price-low") {
@@ -80,7 +82,7 @@ export default function CatalogPage({
     }
 
     return next;
-  }, [priceLimit, products, searchQuery, sortBy]);
+  }, [products, resolvedPriceLimit, searchQuery, sortBy]);
 
   return (
     <main className="min-h-screen bg-[#f5f5fa] text-[#111] transition-colors dark:bg-[#090909] dark:bg-[radial-gradient(circle_at_top,rgba(112,95,25,0.14),transparent_20%),linear-gradient(180deg,#080808_0%,#0c0c0b_100%)] dark:text-[#f1d04b]">
@@ -112,7 +114,7 @@ export default function CatalogPage({
                   onClick={() => setSortOpen((prev) => !prev)}
                   className="flex h-14 w-full items-center justify-between rounded-[22px] border border-neutral-300 bg-white px-5 text-left text-sm font-medium text-neutral-900 shadow-sm transition hover:border-neutral-400 dark:border-[#d6b736] dark:bg-[#0a0a09] dark:text-[#f1d04b] dark:shadow-[0_0_0_1px_rgba(214,183,54,0.12)]"
                 >
-                  <span>Featured</span>
+                  <span>{t("featured")}</span>
                   <svg
                     aria-hidden="true"
                     viewBox="0 0 12 12"
@@ -158,10 +160,10 @@ export default function CatalogPage({
                     <div className="mt-4 rounded-[20px] border border-neutral-200 px-4 py-4 dark:border-[#2c2817] dark:bg-[#0d0d0c]">
                       <div className="flex items-center justify-between gap-3">
                         <p className="text-sm font-medium text-neutral-900 dark:text-[#f1d04b]">
-                          Price Range
+                          {t("priceRange")}
                         </p>
                         <span className="text-xs uppercase tracking-[0.2em] text-neutral-500 dark:text-[#b59d45]">
-                          Up to {asCurrency(priceLimit)}
+                          {t("upTo")} {formatCurrency(resolvedPriceLimit)}
                         </span>
                       </div>
                       <input
@@ -169,13 +171,16 @@ export default function CatalogPage({
                         min={0}
                         max={Math.max(maxProductPrice, 1)}
                         step={1}
-                        value={priceLimit}
-                        onChange={(event) => setPriceLimit(Number(event.target.value))}
+                        value={hasTouchedPrice ? priceLimit : maxProductPrice}
+                        onChange={(event) => {
+                          setHasTouchedPrice(true);
+                          setPriceLimit(Number(event.target.value));
+                        }}
                         className="mt-4 h-2 w-full cursor-pointer appearance-none rounded-full bg-neutral-200 accent-black dark:bg-[#1e1b0f] dark:accent-[#f1d04b]"
                       />
                       <div className="mt-2 flex items-center justify-between text-xs text-neutral-500 dark:text-[#b59d45]">
-                        <span>{asCurrency(0)}</span>
-                        <span>{asCurrency(maxProductPrice)}</span>
+                        <span>{formatCurrency(0)}</span>
+                        <span>{formatCurrency(maxProductPrice)}</span>
                       </div>
                     </div>
                   </div>
@@ -196,13 +201,13 @@ export default function CatalogPage({
                 <input
                   value={searchQuery}
                   onChange={(event) => setSearchQuery(event.target.value)}
-                  placeholder="Search products"
+                  placeholder={t("searchProducts")}
                   className="w-full bg-transparent text-sm outline-none placeholder:text-neutral-400 dark:text-[#f1d04b] dark:placeholder:text-[#8f7c38]"
                 />
               </label>
 
               <div className="flex h-14 items-center justify-center rounded-[22px] border border-neutral-300 bg-white px-5 text-sm font-semibold text-neutral-900 shadow-sm dark:border-[#d6b736] dark:bg-[#f1d04b] dark:text-[#090909]">
-                {filteredProducts.length} results
+                {filteredProducts.length} {t("results")}
               </div>
             </div>
 
@@ -240,7 +245,7 @@ export default function CatalogPage({
                       {product.brand}
                     </p>
                     <p className="mt-2 text-2xl font-semibold text-neutral-950 dark:text-[#f1d04b]">
-                      {asCurrency(product.price)}
+                      {formatCurrency(product.price)}
                     </p>
                     <p className={`mt-1 text-sm font-medium ${statusClass[product.status]}`}>
                       {statusLabel[product.status]}
@@ -248,15 +253,19 @@ export default function CatalogPage({
 
                     <button
                       type="button"
-                      onClick={() => {
-                        if (product.status === "sold-out") return;
-                        addToCart(product);
-                        notifyStore(`${product.name} added to cart.`);
+                      onClick={async () => {
+                        if (!product.inStock || product.stock <= 0 || product.status === "sold-out") return;
+                        await addToCart(product);
+                        notifyStore({
+                          message: `${product.name} added to cart.`,
+                          productId: product.id,
+                          image: product.gallery?.[0] ?? product.image ?? "",
+                        });
                       }}
-                      disabled={product.status === "sold-out"}
+                      disabled={!product.inStock || product.stock <= 0 || product.status === "sold-out"}
                       className="mt-auto rounded-[18px] border border-neutral-300 px-4 py-3 text-lg font-medium text-neutral-950 transition hover:bg-neutral-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-[#403710] dark:bg-[#080808] dark:text-[#f1d04b] dark:hover:bg-[#12110d] dark:disabled:border-[#2f2a16] dark:disabled:text-[#6f6337]"
                     >
-                      {product.status === "sold-out" ? "Unavailable" : "Add to cart"}
+                      {!product.inStock || product.stock <= 0 || product.status === "sold-out" ? t("unavailable") : t("addToCart")}
                     </button>
                   </div>
                 </article>
@@ -265,9 +274,9 @@ export default function CatalogPage({
 
             {filteredProducts.length === 0 ? (
               <div className="rounded-[24px] border border-dashed border-neutral-300 px-6 py-12 text-center dark:border-[#4b3f14] dark:bg-[#0a0a09]">
-                <p className="text-lg font-medium dark:text-[#f1d04b]">No products found.</p>
+                <p className="text-lg font-medium dark:text-[#f1d04b]">{t("noProductsFound")}</p>
                 <p className="mt-2 text-sm text-neutral-500 dark:text-[#b59d45]">
-                  Try a different search or raise the price range.
+                  {t("tryDifferentSearch")}
                 </p>
               </div>
             ) : null}

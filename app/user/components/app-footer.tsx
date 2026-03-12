@@ -11,7 +11,12 @@ export default function AppFooter() {
             <img
               src="/logo_Black-Photoroom.png"
               alt="Katseye logo"
-              className="h-12 w-12 rounded-full object-cover"
+              className="h-12 w-12 rounded-full object-cover dark:hidden"
+            />
+            <img
+              src="/black logo.jpg"
+              alt="Katseye logo"
+              className="hidden h-12 w-12 rounded-full object-cover dark:block"
             />
             <div>
               <p className="text-xs font-semibold uppercase tracking-[0.28em] text-neutral-500 dark:text-[#b59b39]">

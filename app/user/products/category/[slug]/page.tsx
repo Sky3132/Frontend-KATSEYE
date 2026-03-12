@@ -1,62 +1,72 @@
+"use client";
+
+import { useEffect, useMemo, useState } from "react";
+import { useParams } from "next/navigation";
 import CatalogPage from "../../../components/catalog-page";
-import { getProductsBySubcategory } from "../../../lib/products";
+import { type Product } from "../../../lib/catalog-api";
+import { fetchCategoriesTree, type CategoryNode } from "../../../lib/categories-api";
+import { useLiveProducts } from "../../../lib/use-live-products";
+import { useStoreSettings } from "../../../lib/store-settings";
 
-const categoryMeta = {
-  hoodies: {
-    eyebrow: "Merch Category",
-    title: "Hoodies",
-    description: "Official KATSEYE hoodie merch, including Internet Girl and Beautiful Chaos releases.",
-  },
-  "t-shirts": {
-    eyebrow: "Merch Category",
-    title: "T-Shirts",
-    description: "Official KATSEYE T-shirts and baby tees from the merch collection.",
-  },
-  caps: {
-    eyebrow: "Merch Category",
-    title: "Caps",
-    description: "Official KATSEYE caps, hats, and beanie products.",
-  },
-  keychain: {
-    eyebrow: "Accessories Collection",
-    title: "Keychain",
-    description: "Official KATSEYE keychain and keyring products.",
-  },
-  "photo-strip": {
-    eyebrow: "Accessories Collection",
-    title: "Photo Strip",
-    description: "Official KATSEYE photo strip products and collectible photo packages.",
-  },
-  "wrapping-paper": {
-    eyebrow: "Accessories Collection",
-    title: "Wrapping Paper",
-    description: "Official KATSEYE wrapping paper products.",
-  },
-  "slogan-muffler": {
-    eyebrow: "Accessories Collection",
-    title: "Slogan Muffler",
-    description: "Official KATSEYE slogan muffler and scarf products.",
-  },
-  accessories: {
-    eyebrow: "Accessories Collection",
-    title: "Accessories",
-    description: "Official KATSEYE accessories including keychains, photo strips, wrapping paper, and slogan mufflers.",
-  },
-} as const;
-
-type ProductCategoryPageProps = {
-  params: Promise<{ slug: string }>;
+const findNodeBySlug = (nodes: CategoryNode[], slug: string): CategoryNode | null => {
+  for (const node of nodes) {
+    if (node.slug === slug) return node;
+    const child = findNodeBySlug(node.children, slug);
+    if (child) return child;
+  }
+  return null;
 };
 
-export default async function ProductCategoryPage({ params }: ProductCategoryPageProps) {
-  const { slug } = await params;
-  const key = slug as keyof typeof categoryMeta;
-  const meta = categoryMeta[key];
+export default function ProductCategoryPage() {
+  const { translateCategoryText } = useStoreSettings();
+  const params = useParams<{ slug: string }>();
+  const slug = params.slug;
+  const [categories, setCategories] = useState<CategoryNode[]>([]);
+  const [categoriesLoaded, setCategoriesLoaded] = useState(false);
 
-  if (!meta) {
+  useEffect(() => {
+    let cancelled = false;
+
+    fetchCategoriesTree()
+      .then((items) => {
+        if (cancelled) return;
+        setCategories(items);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setCategories([]);
+      })
+      .finally(() => {
+        if (cancelled) return;
+        setCategoriesLoaded(true);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const node = useMemo(() => findNodeBySlug(categories, slug), [categories, slug]);
+  const categoryIds = useMemo(() => {
+    if (!node) return new Set<string>();
+    if (node.children.length === 0) return new Set([node.id]);
+    return new Set(node.children.map((child) => child.id));
+  }, [node]);
+
+  const filter = useMemo(() => {
+    return (item: Product) => {
+      if (categoryIds.size > 0) return categoryIds.has(item.categoryId);
+      // Fallback for backends that haven't shipped category ids to products yet.
+      return item.subcategory === slug;
+    };
+  }, [categoryIds, slug]);
+
+  const products = useLiveProducts({ filter, deps: [slug] });
+
+  if (categoriesLoaded && !node) {
     return (
       <CatalogPage
-        eyebrow="Merch Category"
+        eyebrow="Our Product"
         title="Category Not Found"
         description="This category is not available in the current catalog."
         products={[]}
@@ -66,10 +76,14 @@ export default async function ProductCategoryPage({ params }: ProductCategoryPag
 
   return (
     <CatalogPage
-      eyebrow={meta.eyebrow}
-      title={meta.title}
-      description={meta.description}
-      products={slug === "accessories" ? getProductsByCategory("accessories") : getProductsBySubcategory(slug)}
+      eyebrow={node?.children.length ? node.name : "Our Product"}
+      title={node ? translateCategoryText(node.name) : "Loading…"}
+      description={
+        node
+          ? `Browse products in ${translateCategoryText(node.name)}.`
+          : "Loading category…"
+      }
+      products={products}
     />
   );
 }

@@ -1,9 +1,9 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useSyncExternalStore } from "react";
+import { useEffect, useSyncExternalStore, useState } from "react";
 import ThemeToggle from "../components/theme-toggle";
-import { hasStoredAuth } from "../lib/auth";
+import { syncSessionUser } from "../lib/auth";
 import { products } from "../user/lib/products";
 
 const featuredProducts = products.filter((product) => product.category === "cloth").slice(0, 3);
@@ -30,15 +30,44 @@ const getThemeSnapshot = () => {
   return window.localStorage.getItem(THEME_STORAGE_KEY) === "dark";
 };
 
-const getAuthSnapshot = () => {
-  if (typeof window === "undefined") return false;
-  return hasStoredAuth();
-};
-
 export default function LandingPage() {
   const router = useRouter();
-  const isSignedIn = useSyncExternalStore(subscribeBrowserState, getAuthSnapshot, () => false);
+  const [role, setRole] = useState<null | "customer" | "user" | "admin">(null);
   const isDarkTheme = useSyncExternalStore(subscribeBrowserState, getThemeSnapshot, () => false);
+
+  useEffect(() => {
+    let active = true;
+    void syncSessionUser().then((user) => {
+      if (!active) return;
+      const nextRole =
+        user?.role === "admin"
+          ? "admin"
+          : user?.role === "customer"
+            ? "customer"
+            : user?.role === "user"
+              ? "user"
+              : null;
+      setRole(nextRole);
+    });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const goToProtected = async (targetPath: string) => {
+    const user = await syncSessionUser();
+    if (user?.role === "admin") {
+      router.push("/admin");
+      return;
+    }
+    if (user?.role === "customer" || user?.role === "user") {
+      router.push(targetPath);
+      return;
+    }
+    router.push(`/login?redirect=${encodeURIComponent(targetPath)}`);
+  };
+
+  const isSignedIn = role !== null;
 
   return (
     <main className="min-h-screen bg-[#f8f8f8] text-[#121212] transition-colors dark:bg-[#090909] dark:bg-[radial-gradient(circle_at_top,rgba(112,95,25,0.14),transparent_20%),linear-gradient(180deg,#080808_0%,#0c0c0b_100%)] dark:text-[#f1d04b]">
@@ -92,29 +121,27 @@ export default function LandingPage() {
         <div className="absolute inset-0 bg-gradient-to-b from-black/25 via-black/35 to-black/70" />
 
         <div className="relative mx-auto flex w-full max-w-[1440px] items-end justify-between gap-10">
-          <div className="max-w-4xl text-white">
-            <p className="text-sm font-semibold uppercase tracking-[0.38em] text-white/75">
+          <div className="max-w-4xl text-white dark:text-[#f1d04b]">
+            <p className="text-sm font-semibold uppercase tracking-[0.38em] text-white/75 dark:text-[#c7ba81]">
               Featured Drop
             </p>
             <h1 className="mt-4 text-6xl font-semibold tracking-tight sm:text-7xl xl:text-8xl">
               Style the Vision
             </h1>
-            <p className="mt-5 max-w-3xl text-xl leading-relaxed text-neutral-100 sm:text-2xl">
+            <p className="mt-5 max-w-3xl text-xl leading-relaxed text-neutral-100 dark:text-[#e6dba8] sm:text-2xl">
               Full-screen motion, exclusive drops, and the latest Katseye merch
               in one place.
             </p>
             <div className="mt-8 flex flex-wrap gap-4">
               <button
-                className="rounded-xl bg-white px-10 py-4 text-xl font-semibold text-black"
+                className="rounded-xl bg-white px-10 py-4 text-xl font-semibold text-black dark:bg-[#11110f] dark:text-[#f1d04b]"
                 type="button"
-                onClick={() =>
-                  router.push(isSignedIn ? "/user/products" : "/login")
-                }
+                onClick={() => void goToProtected("/user/products")}
               >
                 Shop The Collection
               </button>
               <button
-                className="rounded-xl border border-white/40 px-10 py-4 text-xl font-semibold text-white"
+                className="rounded-xl border border-white/40 px-10 py-4 text-xl font-semibold text-white dark:border-[#f1d04b]/45 dark:text-[#f1d04b]"
                 type="button"
                 onClick={() =>
                   document
@@ -127,12 +154,12 @@ export default function LandingPage() {
             </div>
           </div>
 
-          <div className="hidden rounded-[28px] border border-white/20 bg-white/10 p-6 text-white backdrop-blur-md lg:block">
-            <p className="text-xs font-semibold uppercase tracking-[0.32em] text-white/70">
+          <div className="hidden rounded-[28px] border border-white/20 bg-white/10 p-6 text-white backdrop-blur-md dark:border-[#f1d04b]/20 dark:text-[#f1d04b] lg:block">
+            <p className="text-xs font-semibold uppercase tracking-[0.32em] text-white/70 dark:text-[#c7ba81]">
               Katseye Music
             </p>
             <p className="mt-3 text-3xl font-semibold">Merches Available</p>
-            <p className="mt-2 max-w-xs text-sm leading-6 text-white/80">
+            <p className="mt-2 max-w-xs text-sm leading-6 text-white/80 dark:text-[#e6dba8]">
               Scroll down for featured merch and most-sale products.
             </p>
           </div>
@@ -150,22 +177,18 @@ export default function LandingPage() {
           {featuredProducts.map((product) => (
             <button
               key={product.id}
-              className="overflow-hidden rounded-2xl border border-neutral-200 bg-white text-left transition hover:-translate-y-1 hover:shadow-xl dark:border-[#2f2a16] dark:bg-[#090909] dark:shadow-[0_0_0_1px_rgba(217,185,47,0.08)]"
+              className="flex h-full flex-col overflow-hidden rounded-2xl border border-neutral-200 bg-white text-left transition hover:-translate-y-1 hover:shadow-xl dark:border-[#2f2a16] dark:bg-[#090909] dark:shadow-[0_0_0_1px_rgba(217,185,47,0.08)]"
               type="button"
-              onClick={() =>
-                router.push(
-                  isSignedIn ? `/user/products/product-details/${product.id}` : "/login",
-                )
-              }
+              onClick={() => void goToProtected(`/user/products/product-details/${product.id}`)}
             >
-              <div className="flex h-[430px] w-full items-center justify-center bg-[#f3f3f1] p-6 dark:bg-[#2b2b2b]">
+              <div className="flex aspect-[4/5] w-full items-center justify-center overflow-hidden bg-[#f3f3f1] dark:bg-[#2b2b2b]">
                 <img
                   src={product.image}
                   alt={product.name}
-                  className="h-full w-full object-contain"
+                  className="h-full w-full object-cover object-center"
                 />
               </div>
-              <div className="space-y-2 p-6">
+              <div className="flex flex-1 flex-col space-y-2 p-6">
                 <h3 className="text-4xl font-semibold">{product.name}</h3>
                 <p className="text-2xl text-neutral-500 dark:text-[#c7ba81]">{product.brand}</p>
                 <p className="text-4xl font-semibold">{asCurrency(product.price)}</p>
@@ -183,22 +206,18 @@ export default function LandingPage() {
           {bestSaleProducts.map((product) => (
             <button
               key={product.id}
-              className="overflow-hidden rounded-2xl border border-neutral-200 bg-white text-left transition hover:-translate-y-1 hover:shadow-xl dark:border-[#2f2a16] dark:bg-[#090909] dark:shadow-[0_0_0_1px_rgba(217,185,47,0.08)]"
+              className="flex h-full flex-col overflow-hidden rounded-2xl border border-neutral-200 bg-white text-left transition hover:-translate-y-1 hover:shadow-xl dark:border-[#2f2a16] dark:bg-[#090909] dark:shadow-[0_0_0_1px_rgba(217,185,47,0.08)]"
               type="button"
-              onClick={() =>
-                router.push(
-                  isSignedIn ? `/user/products/product-details/${product.id}` : "/login",
-                )
-              }
+              onClick={() => void goToProtected(`/user/products/product-details/${product.id}`)}
             >
-              <div className="flex h-[430px] w-full items-center justify-center bg-[#f3f3f1] p-6 dark:bg-[#2b2b2b]">
+              <div className="flex aspect-[4/5] w-full items-center justify-center overflow-hidden bg-[#f3f3f1] dark:bg-[#2b2b2b]">
                 <img
                   src={product.image}
                   alt={product.name}
-                  className="h-full w-full object-contain"
+                  className="h-full w-full object-cover object-center"
                 />
               </div>
-              <div className="space-y-2 p-6">
+              <div className="flex flex-1 flex-col space-y-2 p-6">
                 <h3 className="text-4xl font-semibold">{product.name}</h3>
                 <p className="text-2xl text-neutral-500 dark:text-[#c7ba81]">{product.brand}</p>
                 <p className="text-4xl font-semibold">{asCurrency(product.price)}</p>

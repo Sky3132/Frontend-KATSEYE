@@ -11,10 +11,8 @@ export type Product = {
   subcategory: string;
   image: string;
   gallery: string[];
-  galleryBackground?: string;
   description: string;
   details: string[];
-  colors: string[];
   sizes: string[];
 };
 
@@ -32,7 +30,6 @@ export const products: Product[] = [
     gallery: [
       "https://shop.katseye.world/cdn/shop/files/GabrielaVinyl_Packshot-02.png?v=1762829862&width=1000",
     ],
-    galleryBackground: "#121212",
     description:
       'Limited-edition singles day die-cut vinyl featuring "Gabriela" on Side A and "Gabriela (JULiA LEWiS Reggaeton Remix)" on Side B.',
     details: [
@@ -41,7 +38,6 @@ export const products: Product[] = [
       'Side A: Gabriela',
       'Side B: Gabriela (JULiA LEWiS Reggaeton Remix)',
     ],
-    colors: ["#e45a8d", "#111111"],
     sizes: ['7" Vinyl'],
   },
   {
@@ -57,7 +53,6 @@ export const products: Product[] = [
     gallery: [
       "https://shop.katseye.world/cdn/shop/files/1000x1000_CD_Packshot-03_5784a25f-16dd-4ddd-bfe9-b5803c9ed33e.png?v=1746124525&width=1000",
     ],
-    galleryBackground: "#f6f1f6",
     description:
       "Official Gabriela CD single release from the KATSEYE music collection.",
     details: [
@@ -66,7 +61,6 @@ export const products: Product[] = [
       "Collection: Music",
       "Publicly listed as available on the official store",
     ],
-    colors: ["#f0c7da", "#c69dc0"],
     sizes: ["CD Single"],
   },
   {
@@ -82,7 +76,6 @@ export const products: Product[] = [
     gallery: [
       "https://shop.katseye.world/cdn/shop/files/Beautiful_Official_Store_KATSEYE_CD_Thumbnail.png?v=1749663626&width=1000",
     ],
-    galleryBackground: "#3f4045",
     description:
       "Official store exclusive edition of BEAUTIFUL CHAOS from the KATSEYE music collection.",
     details: [
@@ -91,7 +84,6 @@ export const products: Product[] = [
       "Format listed by the official KATSEYE store",
       "Publicly listed as available",
     ],
-    colors: ["#3f4045", "#d3292f"],
     sizes: ["Exclusive Vinyl"],
   },
   {
@@ -107,7 +99,6 @@ export const products: Product[] = [
     gallery: [
       "https://shop.katseye.world/cdn/shop/files/Beautiful__KATSEYE_CD_Thumbnail.png?v=1746138026&width=1000",
     ],
-    galleryBackground: "#3f4045",
     description:
       "Standard vinyl edition of BEAUTIFUL CHAOS as listed in the official KATSEYE music collection.",
     details: [
@@ -116,7 +107,6 @@ export const products: Product[] = [
       "Publicly listed as available",
       "Album artwork from the official store",
     ],
-    colors: ["#424348", "#d62a30"],
     sizes: ["Standard Vinyl"],
   },
   {
@@ -132,7 +122,6 @@ export const products: Product[] = [
     gallery: [
       "https://shop.katseye.world/cdn/shop/files/DigitalAlbum.jpg?v=1746137262&width=1500",
     ],
-    galleryBackground: "#d4ccb0",
     description:
       "KATSEYE's 2nd EP in digital format, delivered by email, with the seven-track extended version listed on the official store.",
     details: [
@@ -141,7 +130,6 @@ export const products: Product[] = [
       "Delivery by email from the official store",
       "U.S. customers only per store listing",
     ],
-    colors: ["#b8aa70", "#2d5060"],
     sizes: ["Digital"],
   },
   {
@@ -157,7 +145,6 @@ export const products: Product[] = [
     gallery: [
       "https://shop.katseye.world/cdn/shop/files/Vinyl_Packshot_01_b043dab3-5bb0-4189-986a-39adbd3d2af5.png?v=1733353759&width=3000",
     ],
-    galleryBackground: "#e7d4c8",
     description:
       'Official 7" vinyl release for "Touch" from the KATSEYE music collection.',
     details: [
@@ -166,7 +153,6 @@ export const products: Product[] = [
       "Music collection listing",
       "Publicly listed as available",
     ],
-    colors: ["#aa67d4", "#d9d0c6"],
     sizes: ['7" Vinyl'],
   },
   {
@@ -182,7 +168,6 @@ export const products: Product[] = [
     gallery: [
       "https://shop.katseye.world/cdn/shop/files/1000x1000_CD_Packshot-03_5784a25f-16dd-4ddd-bfe9-b5803c9ed33e.png?v=1746124525&width=1000",
     ],
-    galleryBackground: "#f4cae3",
     description:
       'Official "SIS (Soft Is Strong)" physical music release from the KATSEYE store.',
     details: [
@@ -191,7 +176,6 @@ export const products: Product[] = [
       "Music collection item",
       "Publicly listed as available",
     ],
-    colors: ["#efb7da", "#c0d5f2"],
     sizes: ["Vinyl"],
   },
   {
@@ -207,7 +191,6 @@ export const products: Product[] = [
     gallery: [
       "https://shop.katseye.world/cdn/shop/files/DigitalAlbum.jpg?v=1746137262&width=1500",
     ],
-    galleryBackground: "#d4ccb0",
     description:
       'Digital edition of "SIS (Soft Is Strong)" from the official KATSEYE music collection.',
     details: [
@@ -216,7 +199,6 @@ export const products: Product[] = [
       "Music collection item",
       "Publicly listed as available",
     ],
-    colors: ["#b2ae6d", "#405d63"],
     sizes: ["Digital"],
   },
   {
@@ -232,7 +214,6 @@ export const products: Product[] = [
     gallery: [
       "https://shop.katseye.world/cdn/shop/files/Beautiful_Official_Store_KATSEYE_CD_Thumbnail.png?v=1749663626&width=1000",
     ],
-    galleryBackground: "#3f4045",
     description:
       "Chaotic version official store edition of BEAUTIFUL CHAOS, publicly marked sold out on the official KATSEYE shop.",
     details: [
@@ -241,7 +222,6 @@ export const products: Product[] = [
       "Public status: Sold out",
       "Music collection item",
     ],
-    colors: ["#3f4045", "#d3292f"],
     sizes: ["CD Edition"],
   },
   {
@@ -263,7 +243,6 @@ export const products: Product[] = [
       "https://shop.katseye.world/cdn/shop/files/Revised_Merch_Lifestyle_1.jpg?v=1767977750&width=1200",
       "https://shop.katseye.world/cdn/shop/files/Revised_Merch_Lifestyle_3.jpg?v=1767977750&width=1200",
     ],
-    galleryBackground: "#ef000c",
     description:
       "This hoodie captures KATSEYE's lovely and vintage-inspired mood. A playful Wi-Fi print on the sleeves adds a unique and charming detail, and the oversized fit is built for versatile styling and comfortable wear.",
     details: [
@@ -272,7 +251,6 @@ export const products: Product[] = [
       "Vintage-inspired Internet Girl graphic",
       "Wi-Fi print detail on the sleeves",
     ],
-    colors: ["#050505", "#ef000c"],
     sizes: ["S", "M", "L", "XL"],
   },
   {
@@ -292,7 +270,6 @@ export const products: Product[] = [
       "https://shop.katseye.world/cdn/shop/files/KE_Hoodie_Lifestyle_03.jpg?v=1769550385&width=1200",
       "https://shop.katseye.world/cdn/shop/files/KE_Hoodie_Lifestyle_04.jpg?v=1769550385&width=1200",
     ],
-    galleryBackground: "#ef000c",
     description:
       'A rhinestone hoodie that shines like KATSEYE. The front features the tour title "Beautiful Chaos", the back showcases the KATSEYE symbol, and the sleeve is detailed with the KATSEYE logo. With its simple black base and unique rhinestone accents, this hoodie is a stylish daily item you can wear anywhere.',
     details: [
@@ -301,7 +278,6 @@ export const products: Product[] = [
       "KATSEYE symbol on the back",
       "Sleeve logo detail",
     ],
-    colors: ["#050505", "#ef000c"],
     sizes: ["S", "M", "L", "XL", "2XL"],
   },
   {
@@ -321,7 +297,6 @@ export const products: Product[] = [
       "https://shop.katseye.world/cdn/shop/files/KE_ZipHoodie_04.png?v=1769568749&width=1200",
       "https://shop.katseye.world/cdn/shop/files/KE_ZipHoodie_05.png?v=1769568749&width=1200",
     ],
-    galleryBackground: "#ef000c",
     description:
       "A hoodie commemorating KATSEYE's 2025 NA Tour Beautiful Chaos. The front features the KATSEYE symbol, while the back showcases charms representing the members, the logo, and the tour name in a simple but striking zip-up design.",
     details: [
@@ -330,7 +305,6 @@ export const products: Product[] = [
       "2025 NA Tour Beautiful Chaos commemorative design",
       "One random photocard included per official listing",
     ],
-    colors: ["#050505", "#ef000c"],
     sizes: ["S", "M", "L", "XL", "2XL"],
   },
   {
@@ -347,7 +321,6 @@ export const products: Product[] = [
       "https://shop.katseye.world/cdn/shop/files/KE_RoutingT-Shirt_Black__01_Final.png?v=1769202723&width=1200",
       "https://shop.katseye.world/cdn/shop/files/KE_RoutingT-Shirt_Black__02_Final.png?v=1769202723&width=1200",
     ],
-    galleryBackground: "#ef000c",
     description:
       "This T-shirt commemorates KATSEYE: THE BEAUTIFUL CHAOS TOUR. The front features member visuals in a bold package-inspired layout, while the back showcases the tour routing in a receipt-style design.",
     details: [
@@ -356,7 +329,6 @@ export const products: Product[] = [
       "Front member visual layout",
       "Back routing print",
     ],
-    colors: ["#050505", "#ef000c"],
     sizes: ["S", "M", "L", "XL", "2XL"],
   },
   {
@@ -376,7 +348,6 @@ export const products: Product[] = [
       "https://shop.katseye.world/cdn/shop/files/KE_RoutingT-shirt_White__Detail_02_Final.jpg?v=1769549886&width=1200",
       "https://shop.katseye.world/cdn/shop/files/KE_RoutingT-shirt_White__Detail_03.jpg?v=1769549886&width=1200",
     ],
-    galleryBackground: "#ef000c",
     description:
       "This T-shirt captures KATSEYE's unique bodega-inspired vibe. The front features a checkout divider design with Beautiful Chaos, while the back shows a shopping cart filled with a 2025 NA tour receipt and playful objects.",
     details: [
@@ -385,7 +356,6 @@ export const products: Product[] = [
       "Bodega-inspired front and back graphics",
       "Tour receipt design on the back",
     ],
-    colors: ["#ffffff", "#ef000c"],
     sizes: ["S", "M", "L", "XL", "2XL"],
   },
   {
@@ -405,7 +375,6 @@ export const products: Product[] = [
       "https://shop.katseye.world/cdn/shop/files/Revised_Baby_S_S_Shirt_Detail_4.jpg?v=1767914253&width=1200",
       "https://shop.katseye.world/cdn/shop/files/Revised_Merch_Lifestyle_1_a75ae112-20df-420b-8d1f-87b5d4174342.jpg?v=1767914670&width=1200",
     ],
-    galleryBackground: "#ef000c",
     description:
       'This unique "Internet Girl" baby tee features playful memes inspired by the KATSEYE members. Made from smooth, stretchy fabric, it creates a slim silhouette with vintage-feel internet graphics and a Wi-Fi graphic on the back.',
     details: [
@@ -414,7 +383,6 @@ export const products: Product[] = [
       "Internet Girl graphic concept",
       "Back Wi-Fi graphic detail",
     ],
-    colors: ["#050505", "#ef000c"],
     sizes: ["S", "M", "L", "XL"],
   },
   {
@@ -434,7 +402,6 @@ export const products: Product[] = [
       "https://shop.katseye.world/cdn/shop/files/Revised_Merch_Lifestyle_1_9c351006-1398-45c2-aed4-a0a0d78b53e4.jpg?v=1767914177&width=1200",
       "https://shop.katseye.world/cdn/shop/files/Revised_Merch_Lifestyle_3_f5aa5bec-7565-444b-9ddf-d4d3e9042a98.jpg?v=1767914177&width=1200",
     ],
-    galleryBackground: "#ef000c",
     description:
       'This unique "Internet Girl" short-sleeve T-shirt features fun memes inspired by the KATSEYE members. Made from 100% cotton, it pairs a vintage-feel internet graphic on the front with a Wi-Fi graphic on the back.',
     details: [
@@ -443,7 +410,6 @@ export const products: Product[] = [
       "Vintage-inspired Internet Girl graphics",
       "Back Wi-Fi artwork",
     ],
-    colors: ["#050505", "#ef000c"],
     sizes: ["S", "M", "L", "XL", "2XL"],
   },
   {
@@ -460,7 +426,6 @@ export const products: Product[] = [
       "https://shop.katseye.world/cdn/shop/files/gnarly-shirt-front.png?v=1745875951&width=1000",
       "https://shop.katseye.world/cdn/shop/files/gnarly-shirt-back.png?v=1745875951&width=1000",
     ],
-    galleryBackground: "#ef000c",
     description:
       'Black T-shirt featuring front and back graphics inspired by KATSEYE\'s song "Gnarly."',
     details: [
@@ -469,7 +434,6 @@ export const products: Product[] = [
       "Black tee base",
       "Official store merch listing",
     ],
-    colors: ["#050505", "#ef000c"],
     sizes: ["S", "M", "L", "XL", "2XL"],
   },
   {
@@ -489,7 +453,6 @@ export const products: Product[] = [
       "https://shop.katseye.world/cdn/shop/files/KE_S_ST-shirt_Distressed_Black__Lifestyle_01.jpg?v=1769550385&width=1200",
       "https://shop.katseye.world/cdn/shop/files/KE_S_ST-shirt_Distressed_Black__Lifestyle_03.jpg?v=1769550385&width=1200",
     ],
-    galleryBackground: "#ef000c",
     description:
       'A VHS-style T-shirt inspired by KATSEYE\'s "M.I.A" music video. The bold eye graphic and distressed details create an edgy look in a relaxed 100% cotton silhouette.',
     details: [
@@ -498,7 +461,6 @@ export const products: Product[] = [
       "Relaxed fit",
       "Distressed VHS-style M.I.A inspired graphic",
     ],
-    colors: ["#050505", "#ef000c"],
     sizes: ["S", "M", "L", "XL", "2XL"],
   },
   {
@@ -519,7 +481,6 @@ export const products: Product[] = [
       "https://shop.katseye.world/cdn/shop/files/Katseye_Ball_Cap_detail_4.jpg?v=1767914677&width=1200",
       "https://shop.katseye.world/cdn/shop/files/Katseye_Ball_Cap_detail_5.jpg?v=1767914677&width=1200",
     ],
-    galleryBackground: "#ef000c",
     description:
       'This cute "Internet Girl" cap features an ivory base with red accents. Made in a relaxed fit, it works as a comfortable statement piece and includes lyric embroidery on the side.',
     details: [
@@ -528,7 +489,6 @@ export const products: Product[] = [
       "Lyric embroidery on the side",
       "Internet Girl merch collection",
     ],
-    colors: ["#efe5d6", "#c21f2a"],
     sizes: ["One Size"],
   },
   {
@@ -545,7 +505,6 @@ export const products: Product[] = [
       "https://shop.katseye.world/cdn/shop/files/katseye-hat.png?v=1745876300&width=1000",
       "https://shop.katseye.world/cdn/shop/files/katseye-hat-back.png?v=1745876300&width=1000",
     ],
-    galleryBackground: "#ef000c",
     description:
       'Black dad hat featuring graphics inspired by KATSEYE\'s song "Gnarly."',
     details: [
@@ -554,7 +513,6 @@ export const products: Product[] = [
       "Gnarly-inspired graphic details",
       "Official store accessory listing",
     ],
-    colors: ["#050505", "#ef000c"],
     sizes: ["One Size"],
   },
   {
@@ -570,7 +528,6 @@ export const products: Product[] = [
     gallery: [
       "https://shop.katseye.world/cdn/shop/files/KatseyeBeanie-01.png?v=1733353862&width=1000",
     ],
-    galleryBackground: "#ef000c",
     description: "Beanie Details: 50% Recycled Polyester / 50% Acrylic. Single knit.",
     details: [
       "Official KATSEYE accessory product",
@@ -578,7 +535,6 @@ export const products: Product[] = [
       "Single knit beanie",
       "Front logo patch",
     ],
-    colors: ["#111111", "#ef000c"],
     sizes: ["One Size"],
   },
   {
@@ -599,7 +555,6 @@ export const products: Product[] = [
       "https://shop.katseye.world/cdn/shop/files/KE_CityKeychain_NewYork.png?v=1769202922&width=1200",
       "https://shop.katseye.world/cdn/shop/files/KE_CityKeychain_Phoenix.png?v=1769202922&width=1200",
     ],
-    galleryBackground: "#ef000c",
     description:
       "This city keychain celebrates KATSEYE: THE BEAUTIFUL CHAOS TOUR. Each set includes two plush square charms with member motifs and city/tour embroidery.",
     details: [
@@ -608,7 +563,6 @@ export const products: Product[] = [
       "Tour city embroidered variants",
       "Beautiful Chaos Tour keepsake",
     ],
-    colors: ["#ef000c", "#111111"],
     sizes: ["One Size"],
   },
   {
@@ -629,7 +583,6 @@ export const products: Product[] = [
       "https://shop.katseye.world/cdn/shop/files/Revised_Katseye_Keyring_detail_3.jpg?v=1767914869&width=1200",
       "https://shop.katseye.world/cdn/shop/files/Revised_Katseye_Keyring_detail_5.jpg?v=1767914869&width=1200",
     ],
-    galleryBackground: "#ef000c",
     description:
       'This keycap keyring set includes four "Internet Girl" themed keycaps and six keycaps featuring the members\' charms. You can attach them to your keyboard or insert them into the keyring for flexible styling.',
     details: [
@@ -638,7 +591,6 @@ export const products: Product[] = [
       "Four Internet Girl themed keycaps",
       "Six member charm keycaps",
     ],
-    colors: ["#f7efc7", "#ef000c"],
     sizes: ["One Size"],
   },
   {
@@ -659,7 +611,6 @@ export const products: Product[] = [
       "https://shop.katseye.world/cdn/shop/files/Updated_Strip_1.png?v=1767988832&width=1000",
       "https://shop.katseye.world/cdn/shop/files/Updated_Strip_2.png?v=1767988832&width=1000",
     ],
-    galleryBackground: "#ef000c",
     description:
       "This 3-cut photo package features KATSEYE's emoji expressions and includes six photo strips, one for each member, in a cute collectible package.",
     details: [
@@ -668,7 +619,6 @@ export const products: Product[] = [
       "One strip for each member",
       "Collectible package",
     ],
-    colors: ["#ef000c", "#111111"],
     sizes: ["One Size"],
   },
   {
@@ -689,7 +639,6 @@ export const products: Product[] = [
       "https://shop.katseye.world/cdn/shop/files/KatseyeGroup6.png?v=1765231457&width=1000",
       "https://shop.katseye.world/cdn/shop/files/Untitled-12.png?v=1765231457&width=1000",
     ],
-    galleryBackground: "#ef000c",
     description:
       "Holiday wrapping paper decorated with hand-drawn illustrations by the KATSEYE members, offered in red and green versions for festive gift wrapping.",
     details: [
@@ -698,7 +647,6 @@ export const products: Product[] = [
       "Hand-drawn member illustrations",
       "Holiday merch release",
     ],
-    colors: ["#ef000c", "#0a8f39"],
     sizes: ["Set of 2"],
   },
   {
@@ -719,7 +667,6 @@ export const products: Product[] = [
       "https://shop.katseye.world/cdn/shop/files/KE_SloganMuffler_Detail_05.jpg?v=1769551003&width=1200",
       "https://shop.katseye.world/cdn/shop/files/KE_SloganMuffler_Detail_06.jpg?v=1769551003&width=1200",
     ],
-    galleryBackground: "#ef000c",
     description:
       "A knitted slogan scarf celebrating KATSEYE: THE BEAUTIFUL CHAOS TOUR. The bold yellow base and member charm details make it usable as both a cheering slogan and a fashion accessory.",
     details: [
@@ -728,7 +675,6 @@ export const products: Product[] = [
       "Beautiful Chaos Tour item",
       "Member charm details",
     ],
-    colors: ["#ffe500", "#111111"],
     sizes: ["One Size"],
   },
 ];

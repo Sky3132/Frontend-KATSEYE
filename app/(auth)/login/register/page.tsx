@@ -4,15 +4,15 @@ import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
 import AuthShell from "../auth-shell";
 import { AuthField } from "../auth-fields";
+import { api } from "../../../lib/api";
 
-const USERS_API_URL =
-  "https://69a9318232e2d46caf457de9.mockapi.io/api/users/users";
+type RegisterRole = "user" | "admin";
 
 export default function RegisterPage() {
   const router = useRouter();
-  const [firstName, setFirstName] = useState("");
-  const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
+  const [role, setRole] = useState<RegisterRole>("user");
+  const [adminCode, setAdminCode] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [isPasswordFocused, setIsPasswordFocused] = useState(false);
@@ -29,14 +29,19 @@ export default function RegisterPage() {
     setErrorMessage("");
     setSuccessMessage("");
 
-    const first = firstName.trim();
-    const last = lastName.trim();
     const mail = email.trim();
+    const nextRole = role;
+    const code = adminCode.trim();
     const pass = password.trim();
     const confirm = confirmPassword.trim();
 
-    if (!first || !last || !mail || !pass || !confirm) {
+    if (!mail || !pass || !confirm) {
       setErrorMessage("Please complete all fields.");
+      return;
+    }
+
+    if (nextRole === "admin" && !code) {
+      setErrorMessage("Admin accounts require an admin code.");
       return;
     }
 
@@ -53,38 +58,34 @@ export default function RegisterPage() {
     setIsSubmitting(true);
 
     try {
-      const response = await fetch(USERS_API_URL, {
+      await api("/api/users/register", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
         body: JSON.stringify({
-          name: `${first} ${last}`,
           email: mail,
           password: pass,
-          role: "user",
-          createdAt: new Date().toISOString(),
+          role: nextRole,
+          adminCode: nextRole === "admin" ? code : undefined,
         }),
       });
-
-      if (!response.ok) {
-        throw new Error("Failed to create account.");
-      }
 
       setSuccessMessage(
         "Account created successfully. Redirecting to sign in...",
       );
-      setFirstName("");
-      setLastName("");
       setEmail("");
+      setRole("user");
+      setAdminCode("");
       setPassword("");
       setConfirmPassword("");
 
       setTimeout(() => {
         router.push("/login");
       }, 900);
-    } catch {
-      setErrorMessage("Unable to register right now. Please try again.");
+    } catch (error) {
+      setErrorMessage(
+        error instanceof Error
+          ? error.message
+          : "Unable to register right now. Please try again.",
+      );
     } finally {
       setIsSubmitting(false);
     }
@@ -102,24 +103,47 @@ export default function RegisterPage() {
       onSubmit={handleSubmit}
     >
       <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
-        <AuthField
-          id="firstName"
-          name="firstName"
-          label="First Name"
-          placeholder="First name"
-          type="text"
-          value={firstName}
-          onChange={(event) => setFirstName(event.target.value)}
-        />
-        <AuthField
-          id="lastName"
-          name="lastName"
-          label="Last Name"
-          placeholder="Last name"
-          type="text"
-          value={lastName}
-          onChange={(event) => setLastName(event.target.value)}
-        />
+        <div className="space-y-2">
+          <label
+            htmlFor="role"
+            className="text-xs font-semibold uppercase tracking-[0.22em] text-black/55 dark:text-[#b59b39]"
+          >
+            Account Type
+          </label>
+          <select
+            id="role"
+            name="role"
+            value={role}
+            onChange={(event) => setRole(event.target.value as RegisterRole)}
+            className="h-11 w-full rounded-2xl border border-black/10 bg-white px-4 text-sm font-medium text-black outline-none transition focus:border-black/25 dark:border-[#2f2a16] dark:bg-[#11110f] dark:text-[#f1d04b] dark:focus:border-[#d9b92f]"
+          >
+            <option value="user">Customer</option>
+            <option value="admin">Admin</option>
+          </select>
+          <p className="text-xs text-black/45 dark:text-[#9f9156]">
+            Admin access is enforced by the backend role from{" "}
+            <span className="font-mono">/users/me</span>.
+          </p>
+        </div>
+
+        <div
+          className={`space-y-2 transition-all duration-200 ${
+            role === "admin"
+              ? "translate-y-0 opacity-100"
+              : "pointer-events-none -translate-y-2 opacity-0"
+          }`}
+        >
+          <AuthField
+            id="adminCode"
+            name="adminCode"
+            label="Admin Code"
+            placeholder="Admin code"
+            type="password"
+            value={adminCode}
+            onChange={(event) => setAdminCode(event.target.value)}
+            hint="Required for admin accounts (backend enforced)"
+          />
+        </div>
       </div>
 
       <AuthField

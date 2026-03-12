@@ -1,21 +1,33 @@
 "use client";
 
 import { useParams, useRouter } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import StoreHeader from "../../../components/store-header";
-import { addToCart, getCartCount, notifyStore, readCart, type CartItem } from "../../../lib/cart";
-import { getProductById } from "../../../lib/products";
-
-const asCurrency = (value: number) => `$${value.toFixed(2)}`;
+import {
+  addToCart,
+  getCartCount,
+  getCartServerSnapshot,
+  notifyStore,
+  readCart,
+  subscribeCart,
+  selectOnlyCartItem,
+} from "../../../lib/cart";
+import { fetchProductById, type Product } from "../../../lib/catalog-api";
+import { useStoreSettings } from "../../../lib/store-settings";
 
 export default function ProductDetailsPage() {
   const router = useRouter();
   const params = useParams<{ id: string }>();
-  const product = getProductById(params.id);
-  const [cart, setCart] = useState<CartItem[]>(() => readCart());
+  const { formatCurrency, t } = useStoreSettings();
+  const cart = useSyncExternalStore(subscribeCart, readCart, getCartServerSnapshot);
+  const [product, setProduct] = useState<Product | null>(null);
   const [activeImage, setActiveImage] = useState(0);
   const [activeSize, setActiveSize] = useState(0);
   const [qty, setQty] = useState(1);
+
+  useEffect(() => {
+    void fetchProductById(params.id).then(setProduct).catch(() => setProduct(null));
+  }, [params.id]);
 
   const cartCount = useMemo(() => getCartCount(cart), [cart]);
 
@@ -24,20 +36,20 @@ export default function ProductDetailsPage() {
       <main className="min-h-screen bg-[#f7f7f7] transition-colors dark:bg-[#090909] dark:text-[#f1d04b]">
         <StoreHeader cartCount={cartCount} />
         <section className="mx-auto max-w-[1100px] px-6 py-16">
-          <p className="text-xl">Product not found.</p>
+          <p className="text-xl">{t("productNotFound")}</p>
           <button
             type="button"
             className="mt-4 rounded-xl bg-black px-4 py-2 text-white dark:bg-[#f1d04b] dark:text-[#090909]"
             onClick={() => router.push("/user/products")}
           >
-            Back to products
+            {t("backToProducts")}
           </button>
         </section>
       </main>
     );
   }
 
-  const isOutOfStock = product.status === "sold-out";
+  const isOutOfStock = !product.inStock || product.stock <= 0 || product.status === "sold-out";
   const maxQty = Math.max(1, product.stock);
   const statusText =
     product.status === "pre-order"
@@ -52,19 +64,30 @@ export default function ProductDetailsPage() {
         ? "text-rose-600"
         : "text-emerald-600";
   const canAdvanceGallery = product.gallery.length > 1;
-  const addCurrentProductToCart = () => {
+  const selectedSize = product.sizes[activeSize] ?? "";
+  const addCurrentProductToCart = async () => {
     if (isOutOfStock) return;
-    const next = addToCart(product, qty);
-    setCart(next);
-    notifyStore(`${product.name} added to cart.`);
+    await addToCart(product, qty);
+    notifyStore({
+      message: `${product.name}${selectedSize ? ` (${selectedSize})` : ""} added to cart.`,
+      productId: product.id,
+      image: product.gallery?.[0] ?? "",
+    });
   };
 
-  const buyNow = () => {
+  const buyNow = async () => {
     if (isOutOfStock) return;
-    const next = addToCart(product, qty);
-    setCart(next);
-    notifyStore(`Ready to checkout: ${product.name}.`);
-    router.push("/user/checkout");
+    const next = await addToCart(product, qty);
+    const target = [...next].reverse().find((item) => item.productId === product.id);
+    if (target) {
+      selectOnlyCartItem(target.id);
+    }
+    notifyStore({
+      message: `Ready to checkout: ${product.name}${selectedSize ? ` (${selectedSize})` : ""}.`,
+      productId: product.id,
+      image: product.gallery?.[0] ?? "",
+    });
+    router.push("/user/cart");
   };
 
   return (
@@ -128,12 +151,12 @@ export default function ProductDetailsPage() {
 
         <div className="space-y-4 rounded-[28px] border border-neutral-200 bg-white p-6 dark:border-[#2f2a16] dark:bg-[#090909] dark:shadow-[0_0_0_1px_rgba(217,185,47,0.08)]">
           <h1 className="text-5xl font-semibold">{product.name}</h1>
-          <p className="text-2xl font-semibold">{asCurrency(product.price)}</p>
+          <p className="text-2xl font-semibold">{formatCurrency(product.price)}</p>
           <p className={`text-sm font-medium ${statusClass}`}>{statusText}</p>
           <p className="text-sm text-neutral-500 dark:text-[#c7ba81]">{product.description}</p>
 
           <div>
-            <p className="mb-2 text-sm dark:text-[#d6c67f]">Select Size</p>
+            <p className="mb-2 text-sm dark:text-[#d6c67f]">{t("selectSize")}</p>
             <div className="flex flex-wrap gap-2">
               {product.sizes.map((size, index) => (
                 <button
@@ -151,7 +174,7 @@ export default function ProductDetailsPage() {
           </div>
 
           <div>
-            <p className="mb-2 text-sm dark:text-[#d6c67f]">Quantity</p>
+            <p className="mb-2 text-sm dark:text-[#d6c67f]">{t("quantity")}</p>
             <div className="inline-flex items-center rounded-md border border-neutral-300 dark:border-[#d9b92f] dark:bg-[#080808]">
               <button
                 type="button"
@@ -180,7 +203,7 @@ export default function ProductDetailsPage() {
               onClick={addCurrentProductToCart}
               disabled={isOutOfStock}
             >
-              {isOutOfStock ? "Unavailable" : "Add to cart"}
+              {isOutOfStock ? t("unavailable") : t("addToCart")}
             </button>
             <button
               type="button"
@@ -188,21 +211,21 @@ export default function ProductDetailsPage() {
               onClick={buyNow}
               disabled={isOutOfStock}
             >
-              {isOutOfStock ? "Out of stock" : "Buy it now"}
+              {isOutOfStock ? t("outOfStock") : t("buyItNow")}
             </button>
           </div>
 
           <div className="space-y-2 border-t border-neutral-200 pt-3 dark:border-[#f1d04b]/15">
             <details className="rounded-md border border-neutral-200 px-3 py-2 dark:border-[#2f2a16] dark:bg-[#11110f]" open>
-              <summary className="cursor-pointer text-sm font-medium">Description</summary>
+              <summary className="cursor-pointer text-sm font-medium">{t("description")}</summary>
               <p className="mt-2 text-sm text-neutral-600 dark:text-[#c7ba81]">{product.description}</p>
             </details>
             <details className="rounded-md border border-neutral-200 px-3 py-2 dark:border-[#2f2a16] dark:bg-[#11110f]">
-              <summary className="cursor-pointer text-sm font-medium">Shipping & Returns</summary>
-              <p className="mt-2 text-sm text-neutral-600 dark:text-[#c7ba81]">Ships in 2-4 business days. 14-day return window.</p>
+              <summary className="cursor-pointer text-sm font-medium">{t("shippingReturns")}</summary>
+              <p className="mt-2 text-sm text-neutral-600 dark:text-[#c7ba81]">{t("shippingReturnsText")}</p>
             </details>
             <details className="rounded-md border border-neutral-200 px-3 py-2 dark:border-[#2f2a16] dark:bg-[#11110f]">
-              <summary className="cursor-pointer text-sm font-medium">Details</summary>
+              <summary className="cursor-pointer text-sm font-medium">{t("details")}</summary>
               <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-neutral-600 dark:text-[#c7ba81]">
                 {product.details.map((line) => (
                   <li key={line}>{line}</li>

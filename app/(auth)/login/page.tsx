@@ -1,46 +1,36 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import AuthShell from "./auth-shell";
 import { AuthField } from "./auth-fields";
-import {
-  REFRESH_TOKEN_STORAGE_KEY,
-  TOKEN_STORAGE_KEY,
-  USER_STORAGE_KEY,
-} from "../../lib/auth";
+import { api } from "../../lib/api";
+import { syncSessionUser } from "../../lib/auth";
 
-type LoginResponse = {
-  id?: string | number;
-  name?: string;
-  email?: string;
-  role?: string;
-  token?: string;
-  accessToken?: string;
-  refreshToken?: string;
-  tokens?: {
-    token?: string;
-    accessToken?: string;
-    refreshToken?: string;
-  };
-  user?: {
-    id?: string | number;
-    name?: string;
-    email?: string;
-    role?: string;
-  };
-  message?: string;
+const isAdminRole = (role: string | undefined | null) => {
+  const normalized = String(role ?? "").trim().toLowerCase();
+  return normalized === "admin";
 };
 
-const LOGIN_API_URL = "http://localhost:3002/auth/users/login";
-const getAccessToken = (data: LoginResponse | null) =>
-  data?.accessToken ?? data?.token ?? data?.tokens?.accessToken ?? data?.tokens?.token ?? null;
+const getPostLoginRedirect = (role: string | undefined | null, redirectParam: string | null) => {
+  const admin = isAdminRole(role);
+  const defaultTarget = admin ? "/admin" : "/user/products";
 
-const getRefreshToken = (data: LoginResponse | null) =>
-  data?.refreshToken ?? data?.tokens?.refreshToken ?? null;
+  const candidate = (redirectParam ?? "").trim();
+  if (!candidate) return defaultTarget;
+  if (!candidate.startsWith("/")) return defaultTarget;
+
+  if (candidate.startsWith("/admin")) {
+    return admin ? candidate : "/user/products";
+  }
+
+  // Keep admins in the admin area by default.
+  return admin ? "/admin" : candidate.startsWith("/user") ? candidate : "/user/products";
+};
 
 export default function LoginPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -61,58 +51,18 @@ export default function LoginPage() {
     setIsSubmitting(true);
 
     try {
-      const response = await fetch(LOGIN_API_URL, {
+      await api("/api/users/login", {
         method: "POST",
-        credentials: "include",
-        headers: {
-          "Content-Type": "application/json",
-        },
         body: JSON.stringify({
           email: emailValue,
           password: passwordValue,
         }),
       });
-
-      let data: LoginResponse | null = null;
-      try {
-        data = (await response.json()) as LoginResponse;
-      } catch {
-        data = null;
-      }
-
-      if (!response.ok) {
-        setErrorMessage(data?.message ?? "Invalid credentials.");
-        return;
-      }
-
-      const userPayload = data?.user ?? data ?? {};
-      const accessToken = getAccessToken(data);
-      const refreshToken = getRefreshToken(data);
-
-      localStorage.setItem(
-        USER_STORAGE_KEY,
-        JSON.stringify({
-          id: String(userPayload.id ?? ""),
-          name: userPayload.name ?? "User",
-          role: (userPayload.role ?? "user").toLowerCase(),
-          email: userPayload.email ?? emailValue,
-        })
-      );
-      if (accessToken) {
-        localStorage.setItem(TOKEN_STORAGE_KEY, accessToken);
-      } else {
-        localStorage.removeItem(TOKEN_STORAGE_KEY);
-      }
-
-      if (refreshToken) {
-        localStorage.setItem(REFRESH_TOKEN_STORAGE_KEY, refreshToken);
-      } else {
-        localStorage.removeItem(REFRESH_TOKEN_STORAGE_KEY);
-      }
-
-      router.push("/user/products");
-    } catch {
-      setErrorMessage("Unable to reach login service.");
+      const user = await syncSessionUser();
+      const target = getPostLoginRedirect(user?.role, searchParams.get("redirect"));
+      router.replace(target);
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "Unable to reach login service.");
     } finally {
       setIsSubmitting(false);
     }

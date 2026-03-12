@@ -3,8 +3,59 @@
 import Link from "next/link";
 import { useEffect, useState, type ReactNode } from "react";
 import ThemeToggle from "../../components/theme-toggle";
+import { products } from "../../user/lib/products";
 
-const slides = [
+type Slide = {
+  title: string;
+  eyebrow: string;
+  price: string;
+  description: string;
+  image: string;
+};
+
+type SlideOptions = {
+  eyebrow: string;
+  title?: string;
+  description?: string;
+  image?: string;
+};
+
+const formatProductSlide = (productId: string, options: SlideOptions): Slide | null => {
+  const product = products.find((item) => item.id === productId);
+
+  if (!product) {
+    return null;
+  }
+
+  return {
+    title: options.title ?? product.name,
+    eyebrow: options.eyebrow,
+    price: `$${product.price.toFixed(2)}`,
+    description: options.description ?? product.description,
+    image: options.image ?? product.image,
+  };
+};
+
+const catalogSlides = [
+  formatProductSlide("merch-001", {
+    eyebrow: "Featured Hoodie",
+    image:
+      "https://shop.katseye.world/cdn/shop/files/Revised_Hoodie_Front.png?v=1767914137&width=1600",
+  }),
+  formatProductSlide("merch-006", {
+    eyebrow: "T-Shirt Pick",
+    title: "Internet Girl Baby Tee",
+    image:
+      "https://shop.katseye.world/cdn/shop/files/Revised_Baby_S_S_Shirt_Front.png?v=1767914253&width=1600",
+  }),
+  formatProductSlide("music-002", {
+    eyebrow: "Album Release",
+    image:
+      "https://shop.katseye.world/cdn/shop/files/1000x1000_CD_Packshot-03_5784a25f-16dd-4ddd-bfe9-b5803c9ed33e.png?v=1746124525&width=1600",
+  }),
+].filter((slide): slide is Slide => slide !== null);
+
+const slides: Slide[] = [
   {
     title: "Gap Collaboration Drop",
     eyebrow: "Featured Release",
@@ -14,33 +65,7 @@ const slides = [
     image:
       "https://d1ef7ke0x2i9g8.cloudfront.net/hong-kong/_large700/5695725/KATSEYE-x-Gap.webp",
   },
-  {
-    title: "Eclipse Logo Tee",
-    eyebrow: "Daily Essential",
-    price: "$28.99",
-    description:
-      "A lightweight staple with a sharp monochrome logo treatment built for everyday styling.",
-    image:
-      "https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?auto=format&fit=crop&w=900&q=80",
-  },
-  {
-    title: 'Nova "Galaxy" Tour Hoodie',
-    eyebrow: "Best Seller",
-    price: "$84.99",
-    description:
-      "Oversized comfort, premium fleece, and the kind of graphic energy that carries the full look.",
-    image:
-      "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=900&q=80",
-  },
-  {
-    title: "Starlight Signature Cap",
-    eyebrow: "Accessory Pick",
-    price: "$22.99",
-    description:
-      "A clean finishing piece that sharpens the outfit without competing with the rest of the fit.",
-    image:
-      "https://images.unsplash.com/photo-1487017159836-4e23ece2e4cf?auto=format&fit=crop&w=900&q=80",
-  },
+  ...catalogSlides,
 ];
 
 type AuthShellProps = {
@@ -121,7 +146,7 @@ export default function AuthShell({
 
           <div className="mx-auto flex w-full max-w-[430px] flex-1 flex-col justify-center py-8">
             <div className="text-center">
-              <h2 className="text-4xl font-semibold tracking-[-0.03em] text-black sm:text-5xl">
+              <h2 className="text-4xl font-semibold tracking-[-0.03em] text-black dark:text-[#f1d04b] sm:text-5xl">
                 {title}
               </h2>
               <p className="mt-4 text-base leading-7 text-black/55 dark:text-[#c7ba81] sm:text-lg">{description}</p>
@@ -210,7 +235,7 @@ export default function AuthShell({
             <div />
 
             <div className="mx-auto max-w-[560px] rounded-[28px] border border-white/12 bg-black/28 px-8 py-10 text-center text-white shadow-2xl backdrop-blur-md">
-              <div className="relative min-h-[320px] pb-4">
+              <div className="relative min-h-[380px] pb-6">
                 {slides.map((slide, index) => (
                   <div
                     key={slide.title}
@@ -221,7 +246,7 @@ export default function AuthShell({
                     <p className="text-xs font-semibold uppercase tracking-[0.34em] text-white/80">
                       {slide.eyebrow}
                     </p>
-                    <h3 className="mt-4 text-4xl font-semibold tracking-[-0.04em] text-white drop-shadow-[0_4px_18px_rgba(0,0,0,0.45)] xl:text-5xl">
+                    <h3 className="mx-auto mt-4 max-w-[12ch] text-balance text-3xl font-semibold leading-[0.95] tracking-[-0.04em] text-white drop-shadow-[0_4px_18px_rgba(0,0,0,0.45)] sm:text-4xl xl:text-[3.25rem]">
                       {slide.title}
                     </h3>
                     <p className="mt-4 text-sm font-semibold uppercase tracking-[0.28em] text-white/85">
