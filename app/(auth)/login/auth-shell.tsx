@@ -80,30 +80,6 @@ type AuthShellProps = {
   children: ReactNode;
 };
 
-const socialProviders = [
-  {
-    id: "gmail",
-    label: "Gmail",
-    content: (
-      <svg
-        aria-hidden="true"
-        viewBox="0 0 24 24"
-        className="h-[18px] w-[18px]"
-        fill="none"
-        xmlns="http://www.w3.org/2000/svg"
-      >
-        <path d="M3.75 6.75L12 13.5L20.25 6.75" stroke="#EA4335" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-        <path d="M4.5 7.5V18H8.25V11.25L12 14.25L15.75 11.25V18H19.5V7.5" stroke="#4285F4" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-        <path d="M4.5 18V7.5L8.25 10.5V18" stroke="#34A853" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-        <path d="M19.5 18V7.5L15.75 10.5V18" stroke="#FBBC05" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-      </svg>
-    ),
-  },
-  { id: "apple", label: "Apple", content: "A" },
-  { id: "facebook", label: "Facebook", content: "F" },
-  { id: "x", label: "X", content: "X" },
-] as const;
-
 export default function AuthShell({
   activeTab,
   title,
@@ -185,27 +161,6 @@ export default function AuthShell({
 
             {errorMessage ? <p className="mt-4 text-sm text-red-600">{errorMessage}</p> : null}
             {successMessage ? <p className="mt-4 text-sm text-green-700">{successMessage}</p> : null}
-
-            <div className="mt-8">
-              <div className="flex items-center gap-3 text-sm text-black/40 dark:text-[#9f9156]">
-                <span className="h-px flex-1 bg-black/10 dark:bg-[#f1d04b]/15" />
-                <span>Continue with</span>
-                <span className="h-px flex-1 bg-black/10 dark:bg-[#f1d04b]/15" />
-              </div>
-
-              <div className="mt-5 flex items-center justify-center gap-4">
-                {socialProviders.map((provider) => (
-                  <button
-                    key={provider.id}
-                    type="button"
-                    aria-label={`Continue with ${provider.label}`}
-                    className="flex h-11 w-11 items-center justify-center rounded-2xl border border-black/10 bg-white text-sm font-semibold text-black transition hover:border-black/25 dark:border-[#2f2a16] dark:bg-[#11110f] dark:text-[#f1d04b]"
-                  >
-                    {provider.content}
-                  </button>
-                ))}
-              </div>
-            </div>
 
             <div className="mt-10 flex flex-wrap items-center justify-between gap-3 text-xs text-black/45 dark:text-[#9f9156]">
               <span>Copyright 2026 Katseye. All rights reserved.</span>

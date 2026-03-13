@@ -17,6 +17,10 @@ export type Product = {
   category: "album" | "cloth" | "accessories";
   categoryId: string;
   categoryName: string;
+  mainCategoryId: string;
+  mainCategoryName: string;
+  subcategoryId: string;
+  subcategoryName: string;
   parentCategoryId: string;
   subcategory: string;
   image: string;
@@ -139,21 +143,32 @@ const normalizeProduct = (value: unknown): Product | null => {
       : typeof inStockRaw === "number"
         ? inStockRaw > 0
         : stock > 0;
-  const categoryId = asString(record.category_id || record.categoryId || "");
-  const categoryName = asString(record.category_name || record.categoryName || record.category || "");
+  const mainCategoryId = asString(record.main_category_id || record.mainCategoryId || "");
+  const mainCategoryName = asString(record.main_category_name || record.mainCategoryName || "");
+  const subcategoryId = asString(
+    record.subcategory_id || record.subcategoryId || record.category_id || record.categoryId || "",
+  );
+  const subcategoryName = asString(
+    record.subcategory_name || record.subcategoryName || record.category_name || record.categoryName || record.category || "",
+  );
+  const categoryId = subcategoryId || mainCategoryId;
+  const categoryName = subcategoryName || mainCategoryName;
   const parentCategoryId = asString(
     record.parent_category_id || record.parentCategoryId || "",
   );
   const category = getCategory(
-    record.category ||
+    mainCategoryName ||
+      record.category ||
       record.category_name ||
       record.category_slug ||
-      record.type,
+      record.type ||
+      categoryName,
   );
   const images = normalizeImages(record);
   const sizes = normalizeVariantNames(record.variants);
-  const subcategory =
-    parentCategoryId && categoryName
+  const subcategory = subcategoryName
+    ? slugifyCategoryName(subcategoryName)
+    : parentCategoryId && categoryName
       ? slugifyCategoryName(categoryName)
       : getSubcategory(record.subcategory || record.slug, category);
 
@@ -169,6 +184,10 @@ const normalizeProduct = (value: unknown): Product | null => {
     category,
     categoryId,
     categoryName,
+    mainCategoryId,
+    mainCategoryName,
+    subcategoryId,
+    subcategoryName: subcategoryName || "",
     parentCategoryId,
     subcategory,
     image: images[0] ?? defaultImage,

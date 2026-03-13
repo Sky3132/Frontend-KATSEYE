@@ -13,6 +13,7 @@ import {
   fetchAdminProducts,
   type Product as ManagedProduct,
 } from "../../user/lib/catalog-api";
+import { normalizeCategoriesTree, type CategoryNode } from "../../user/lib/categories-api";
 
 type ProductFormState = {
   id: string;
@@ -22,7 +23,8 @@ type ProductFormState = {
   stock: string;
   status: ManagedProduct["status"];
   category: ManagedProduct["category"];
-  categoryId: string;
+  mainCategoryId: string;
+  subcategoryId: string;
   description: string;
   details: string;
   sizes: string;
@@ -33,12 +35,6 @@ type ProductFormState = {
 type ToastState = { message: string; tone: "success" | "error" } | null;
 type CategoryFilter = ManagedProduct["category"] | "all";
 type SubcategoryFilter = string | "all";
-
-type AdminCategory = {
-  id: string;
-  categoryName: string;
-  parentCategoryId: string;
-};
 
 const parseCommaList = (value: string) =>
   value
@@ -53,17 +49,35 @@ const resolveTopLevelCategory = (label: string): ManagedProduct["category"] => {
   if (normalized.includes("album") || normalized.includes("music") || normalized.includes("vinyl") || normalized.includes("cd")) {
     return "album";
   }
-  if (normalized.includes("access")) return "accessories";
+  if (
+    normalized.includes("access") ||
+    normalized === "categories" ||
+    normalized === "category"
+  ) {
+    return "accessories";
+  }
   return "cloth";
 };
 
-const findBackendRootCategoryId = (
-  categories: AdminCategory[],
-  target: ManagedProduct["category"],
-) => {
-  const roots = categories.filter((item) => !item.parentCategoryId);
-  const match = roots.find((root) => resolveTopLevelCategory(root.categoryName) === target);
-  return match?.id ?? "";
+const formatMainCategoryName = (value: string) => {
+  const trimmed = value.trim();
+  if (!trimmed) return "";
+  const normalized = trimmed.toLowerCase();
+  if (normalized === "categories" || normalized === "category") return "ACCESSORIES";
+  if (normalized === "album") return "ALBUM";
+  return trimmed;
+};
+
+const mergeCategoryNodes = (left: CategoryNode[], right: CategoryNode[]) => {
+  const byId = new Map<string, CategoryNode>();
+  for (const node of left) {
+    if (node.id) byId.set(node.id, node);
+  }
+  for (const node of right) {
+    if (!node.id) continue;
+    if (!byId.has(node.id)) byId.set(node.id, node);
+  }
+  return Array.from(byId.values());
 };
 
 const formatCategoryLabel = (category: ManagedProduct["category"]) => {
@@ -81,19 +95,11 @@ const getStockButtonMeta = (stock: number) => {
       disabled: true,
     };
   }
-  if (stock <= 3) {
-    return {
-      label: "Almost out",
-      className:
-        "border-rose-200 text-rose-600 dark:border-rose-500/30 dark:text-rose-300",
-      disabled: false,
-    };
-  }
-  if (stock <= 10) {
+  if (stock < 20) {
     return {
       label: "Low stock",
       className:
-        "border-amber-200 text-amber-700 dark:border-amber-500/30 dark:text-amber-200",
+        "border-rose-200 text-rose-600 dark:border-rose-500/30 dark:text-rose-300",
       disabled: false,
     };
   }
@@ -168,7 +174,8 @@ const emptyForm = (): ProductFormState => ({
   stock: "",
   status: "available",
   category: "cloth",
-  categoryId: "",
+  mainCategoryId: "",
+  subcategoryId: "",
   description: "",
   details: "",
   sizes: "",
@@ -184,13 +191,26 @@ const toFormState = (product: ManagedProduct): ProductFormState => ({
   stock: String(product.stock),
   status: product.status,
   category: product.category,
-  categoryId: product.categoryId ?? "",
+  mainCategoryId: product.mainCategoryId ?? "",
+  subcategoryId: product.subcategoryId ?? "",
   description: product.description,
   details: product.details.join("\n"),
   sizes: sanitizeSizesForCategory(product.category, product.sizes.join(", ")),
   image: product.image,
   gallery: normalizeGallery(product.image, product.gallery),
 });
+
+const normalizeCategoryOptions = (value: unknown): { id: string; name: string }[] => {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((row) => (typeof row === "object" && row !== null ? (row as Record<string, unknown>) : null))
+    .filter((row): row is Record<string, unknown> => row !== null)
+    .map((row) => ({
+      id: String(row.id ?? ""),
+      name: String(row.category_name ?? row.categoryName ?? row.name ?? ""),
+    }))
+    .filter((row) => Boolean(row.id) && Boolean(row.name));
+};
 
 export default function ProductManagementPage() {
   const { currency, formatCurrency } = useStoreSettings();
@@ -201,19 +221,29 @@ export default function ProductManagementPage() {
   const [categoryFilter, setCategoryFilter] = useState<CategoryFilter>("all");
   const [subcategoryFilter, setSubcategoryFilter] =
     useState<SubcategoryFilter>("all");
-  const [adminCategories, setAdminCategories] = useState<AdminCategory[]>([]);
-  const [adminCategoriesLoading, setAdminCategoriesLoading] = useState(true);
+  const [mainCategories, setMainCategories] = useState<CategoryNode[]>([]);
+  const [mainCategoriesLoading, setMainCategoriesLoading] = useState(true);
+  const [subcategories, setSubcategories] = useState<{ id: string; name: string }[]>([]);
+  const [subcategoriesLoading, setSubcategoriesLoading] = useState(false);
   const [saveMessage, setSaveMessage] = useState(
     "Manage product catalog with CRUD.",
   );
   const [galleryUrlDraft, setGalleryUrlDraft] = useState("");
   const [toast, setToast] = useState<ToastState>(null);
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const subcategoryRequestRef = useRef(0);
   const isClothCategory = form.category === "cloth";
-  const albumRootCategoryId = useMemo(
-    () => findBackendRootCategoryId(adminCategories, "album"),
-    [adminCategories],
+  const selectedMainCategory = useMemo(
+    () =>
+      mainCategories.find((category) => category.id === form.mainCategoryId) ??
+      null,
+    [mainCategories, form.mainCategoryId],
   );
+  const isAlbumMainCategorySelected =
+    form.mainCategoryId === "__missing_album__" ||
+    (selectedMainCategory
+      ? resolveTopLevelCategory(selectedMainCategory.name) === "album"
+      : false);
 
   const setField = <K extends keyof ProductFormState>(
     key: K,
@@ -240,40 +270,59 @@ export default function ProductManagementPage() {
   useEffect(() => {
     let cancelled = false;
 
-    api("/api/admin/categories")
-      .then((response) => (Array.isArray(response) ? response : []))
-      .then((rows) => {
-        if (cancelled) return;
-        const normalized = rows
-          .map((row) => (typeof row === "object" && row !== null ? (row as Record<string, unknown>) : null))
-          .filter((row): row is Record<string, unknown> => row !== null)
-          .map((row): AdminCategory => {
-            const id = String(row.id ?? "");
-            const categoryName = String(row.category_name ?? row.categoryName ?? "");
-            const parentCategoryId = String(row.parent_category_id ?? row.parentCategoryId ?? "");
-            return {
-              id,
-              categoryName,
-              parentCategoryId: parentCategoryId === "null" ? "" : parentCategoryId,
-            };
-          })
-          .filter((row) => Boolean(row.id) && Boolean(row.categoryName));
+    const load = async () => {
+      const [adminResult, publicResult] = await Promise.allSettled([
+        api("/api/admin/categories/tree"),
+        api("/api/categories/tree"),
+      ]);
 
-        setAdminCategories(normalized);
-      })
-      .catch(() => {
-        if (cancelled) return;
-        setAdminCategories([]);
-      })
-      .finally(() => {
-        if (cancelled) return;
-        setAdminCategoriesLoading(false);
-      });
+      if (cancelled) return;
+
+      const adminNodes =
+        adminResult.status === "fulfilled"
+          ? normalizeCategoriesTree(adminResult.value)
+          : [];
+      const publicNodes =
+        publicResult.status === "fulfilled"
+          ? normalizeCategoriesTree(publicResult.value)
+          : [];
+
+      const merged = mergeCategoryNodes(adminNodes, publicNodes);
+      setMainCategories(merged);
+    };
+
+    void load().finally(() => {
+      if (cancelled) return;
+      setMainCategoriesLoading(false);
+    });
 
     return () => {
       cancelled = true;
     };
   }, []);
+
+  const mainCategoryOptions = useMemo(() => {
+    const sorted = [...mainCategories].sort((a, b) =>
+      a.name.localeCompare(b.name),
+    );
+
+    const hasAlbum = sorted.some(
+      (item) => resolveTopLevelCategory(item.name) === "album",
+    );
+
+    if (hasAlbum) return sorted.map((item) => ({ ...item, disabled: false }));
+
+    return [
+      ...sorted.map((item) => ({ ...item, disabled: false })),
+      {
+        id: "__missing_album__",
+        name: "ALBUM",
+        slug: "album",
+        children: [],
+        disabled: false,
+      },
+    ];
+  }, [mainCategories]);
 
   useEffect(() => {
     return () => {
@@ -281,67 +330,24 @@ export default function ProductManagementPage() {
     };
   }, []);
 
-  const resolvedItems = useMemo(() => {
-    if (adminCategories.length === 0) return items;
-
-    const byId = new Map(adminCategories.map((category) => [category.id, category]));
-    const resolveRootName = (categoryId: string) => {
-      const node = byId.get(String(categoryId));
-      if (!node) return "";
-      if (!node.parentCategoryId) return node.categoryName;
-      return byId.get(node.parentCategoryId)?.categoryName ?? node.categoryName;
-    };
-
-    return items.map((item) => {
-      const rootName = resolveRootName(item.categoryId);
-      if (!rootName) return item;
-      return { ...item, category: resolveTopLevelCategory(rootName) };
-    });
-  }, [adminCategories, items]);
-
   const searchedResolvedItems = useMemo(() => {
     const query = search.trim().toLowerCase();
-    if (!query) return resolvedItems;
+    if (!query) return items;
 
-    return resolvedItems.filter((item) => {
-      const haystack = [item.name, item.brand, item.category, item.subcategory]
+    return items.filter((item) => {
+      const haystack = [
+        item.name,
+        item.brand,
+        item.category,
+        item.subcategoryName,
+        item.subcategory,
+        item.mainCategoryName,
+      ]
         .join(" ")
         .toLowerCase();
       return haystack.includes(query);
     });
-  }, [resolvedItems, search]);
-
-  const adminCategoryTree = useMemo(() => {
-    const allowedRootIds =
-      form.category === "album"
-        ? new Set([findBackendRootCategoryId(adminCategories, "album")].filter(Boolean))
-        : form.category === "accessories"
-          ? new Set([findBackendRootCategoryId(adminCategories, "accessories")].filter(Boolean))
-          : new Set([findBackendRootCategoryId(adminCategories, "cloth")].filter(Boolean));
-
-    const parents = adminCategories
-      .filter((item) => !item.parentCategoryId)
-      .filter((item) => allowedRootIds.size === 0 || allowedRootIds.has(item.id))
-      .sort((a, b) => a.categoryName.localeCompare(b.categoryName));
-
-    const childrenByParent = new Map<string, AdminCategory[]>();
-    for (const category of adminCategories) {
-      if (!category.parentCategoryId) continue;
-      if (allowedRootIds.size > 0 && !allowedRootIds.has(category.parentCategoryId)) continue;
-      const existing = childrenByParent.get(category.parentCategoryId);
-      if (existing) existing.push(category);
-      else childrenByParent.set(category.parentCategoryId, [category]);
-    }
-
-    for (const [parentId, children] of childrenByParent.entries()) {
-      childrenByParent.set(
-        parentId,
-        children.sort((a, b) => a.categoryName.localeCompare(b.categoryName)),
-      );
-    }
-
-    return { parents, childrenByParent };
-  }, [adminCategories, form.category]);
+  }, [items, search]);
 
   const visibleItems = useMemo(() => {
     if (categoryFilter === "all") return searchedResolvedItems;
@@ -353,7 +359,7 @@ export default function ProductManagementPage() {
     return Array.from(
       new Set(
         pool
-          .map((item) => item.subcategory?.trim())
+          .map((item) => item.subcategoryName?.trim())
           .filter((value): value is string => Boolean(value)),
       ),
     ).sort((a, b) => a.localeCompare(b));
@@ -361,7 +367,9 @@ export default function ProductManagementPage() {
 
   const subcategoryItems = useMemo(() => {
     if (subcategoryFilter === "all") return visibleItems;
-    return visibleItems.filter((item) => item.subcategory === subcategoryFilter);
+    return visibleItems.filter(
+      (item) => item.subcategoryName === subcategoryFilter,
+    );
   }, [subcategoryFilter, visibleItems]);
 
   const categoryLabel = useMemo(() => {
@@ -380,24 +388,90 @@ export default function ProductManagementPage() {
     setField("sizes", joinCommaList(ordered));
   };
 
-  const handleCategoryChange = (nextCategory: ManagedProduct["category"]) => {
-    setCategoryFilter(nextCategory);
-    setSubcategoryFilter("all");
+  const loadSubcategoriesForMain = async (
+    mainCategoryId: string,
+    preferredSubcategoryId: string,
+  ) => {
+    const requestId = ++subcategoryRequestRef.current;
+
+    if (!mainCategoryId) {
+      setSubcategories([]);
+      setSubcategoriesLoading(false);
+      setForm((prev) => (prev.subcategoryId ? { ...prev, subcategoryId: "" } : prev));
+      return;
+    }
+
+    setSubcategoriesLoading(true);
+
+    try {
+      const response = await api(
+        `/api/admin/categories/${mainCategoryId}/subcategories`,
+      );
+      if (requestId !== subcategoryRequestRef.current) return;
+      const options = normalizeCategoryOptions(response);
+      setSubcategories(options);
+      setForm((prev) => {
+        if (options.length === 0) {
+          return prev.subcategoryId ? { ...prev, subcategoryId: "" } : prev;
+        }
+        if (
+          preferredSubcategoryId &&
+          options.some((item) => item.id === preferredSubcategoryId)
+        ) {
+          return { ...prev, subcategoryId: preferredSubcategoryId };
+        }
+        const selected = prev.subcategoryId;
+        if (selected && options.some((item) => item.id === selected)) return prev;
+        return { ...prev, subcategoryId: options[0]?.id ?? "" };
+      });
+    } catch {
+      if (requestId !== subcategoryRequestRef.current) return;
+      setSubcategories([]);
+      setForm((prev) => (prev.subcategoryId ? { ...prev, subcategoryId: "" } : prev));
+    } finally {
+      if (requestId !== subcategoryRequestRef.current) return;
+      setSubcategoriesLoading(false);
+    }
+  };
+
+  const handleMainCategoryChange = (nextMainCategoryId: string) => {
+    subcategoryRequestRef.current += 1;
+    setSubcategories([]);
+    setSubcategoriesLoading(false);
+
+    if (nextMainCategoryId === "__missing_album__") {
+      setForm((prev) => ({
+        ...prev,
+        category: "album",
+        mainCategoryId: nextMainCategoryId,
+        subcategoryId: "",
+        sizes: sanitizeSizesForCategory("album", prev.sizes),
+      }));
+      setSaveMessage(
+        "Album main category is missing in the backend. Create it first to add album products.",
+      );
+      showToast(
+        "Album main category is missing in the backend.",
+        "error",
+      );
+      return;
+    }
+
+    const selected =
+      mainCategories.find((item) => item.id === nextMainCategoryId) ?? null;
+    const nextCategory = selected
+      ? resolveTopLevelCategory(selected.name)
+      : form.category;
+
     setForm((prev) => ({
       ...prev,
       category: nextCategory,
-      categoryId:
-        nextCategory === "album"
-          ? albumRootCategoryId || findBackendRootCategoryId(adminCategories, "album") || ""
-          : editingId
-            ? prev.categoryId
-            : findBackendRootCategoryId(adminCategories, nextCategory) || "",
+      mainCategoryId: nextMainCategoryId,
+      subcategoryId: "",
       sizes: sanitizeSizesForCategory(nextCategory, prev.sizes),
     }));
-  };
 
-  const handleBackendCategoryChange = (nextCategoryId: string) => {
-    setForm((prev) => ({ ...prev, categoryId: nextCategoryId }));
+    void loadSubcategoriesForMain(nextMainCategoryId, "");
   };
 
   const nonClothVariantOptions =
@@ -464,12 +538,44 @@ export default function ProductManagementPage() {
 
     try {
       if (editingId) {
-        const selectedCategoryId = Number(form.categoryId);
-        if (Number.isFinite(selectedCategoryId) && selectedCategoryId > 0) {
+        if (form.mainCategoryId === "__missing_album__") {
+          setSaveMessage(
+            "Album main category is missing in the backend. Create it first to edit album products.",
+          );
+          showToast("Album main category is missing in the backend.", "error");
+          return;
+        }
+
+        const selectedMainCategoryId = Number(form.mainCategoryId);
+        if (
+          Number.isFinite(selectedMainCategoryId) &&
+          selectedMainCategoryId > 0
+        ) {
+          if (subcategoriesLoading) {
+            setSaveMessage("Please wait for subcategories to load.");
+            showToast("Subcategories are still loading.", "error");
+            return;
+          }
+
+          const shouldSendSubcategory = subcategories.length > 0;
+          const selectedSubcategory =
+            shouldSendSubcategory && form.subcategoryId
+              ? subcategories.find((item) => item.id === form.subcategoryId) ?? null
+              : null;
+
+          if (shouldSendSubcategory && !selectedSubcategory) {
+            setSaveMessage("Select a valid subcategory for the chosen main category.");
+            showToast("Select a valid subcategory.", "error");
+            return;
+          }
+
           await api(`/api/admin/products/${editingId}`, {
             method: "PUT",
             body: JSON.stringify({
-              category_id: selectedCategoryId,
+              main_category_id: selectedMainCategoryId,
+              subcategory_id: shouldSendSubcategory
+                ? Number(form.subcategoryId)
+                : null,
             }),
           });
         }
@@ -481,12 +587,41 @@ export default function ProductManagementPage() {
           }),
         });
       } else {
+        if (form.mainCategoryId === "__missing_album__") {
+          setSaveMessage(
+            "Album main category is missing in the backend. Create it first to add album products.",
+          );
+          showToast("Album main category is missing in the backend.", "error");
+          return;
+        }
+
         const primaryImage = form.image.trim();
         const images = normalizeGallery(primaryImage, form.gallery);
-        const selectedCategoryId = Number(form.categoryId);
-        if (!Number.isFinite(selectedCategoryId) || selectedCategoryId <= 0) {
-          setSaveMessage("Select a category before creating the product.");
-          showToast("Select a category.", "error");
+        const selectedMainCategoryId = Number(form.mainCategoryId);
+        if (
+          !Number.isFinite(selectedMainCategoryId) ||
+          selectedMainCategoryId <= 0
+        ) {
+          setSaveMessage("Select a main category before creating the product.");
+          showToast("Select a main category.", "error");
+          return;
+        }
+
+        if (subcategoriesLoading) {
+          setSaveMessage("Please wait for subcategories to load.");
+          showToast("Subcategories are still loading.", "error");
+          return;
+        }
+
+        const shouldSendSubcategory = subcategories.length > 0;
+        const selectedSubcategory =
+          shouldSendSubcategory && form.subcategoryId
+            ? subcategories.find((item) => item.id === form.subcategoryId) ?? null
+            : null;
+
+        if (shouldSendSubcategory && !selectedSubcategory) {
+          setSaveMessage("Select a subcategory before creating the product.");
+          showToast("Select a subcategory.", "error");
           return;
         }
 
@@ -497,7 +632,10 @@ export default function ProductManagementPage() {
             description: form.description.trim(),
             price: Number(form.price),
             stock: stockNumber,
-            category_id: selectedCategoryId,
+            main_category_id: selectedMainCategoryId,
+            subcategory_id: shouldSendSubcategory
+              ? Number(form.subcategoryId)
+              : null,
             image_url: primaryImage,
             images,
             variants: form.sizes
@@ -523,6 +661,9 @@ export default function ProductManagementPage() {
       );
       setEditingId(null);
       setForm(emptyForm());
+      subcategoryRequestRef.current += 1;
+      setSubcategories([]);
+      setSubcategoriesLoading(false);
       setGalleryUrlDraft("");
     } catch (error) {
       const message =
@@ -534,13 +675,11 @@ export default function ProductManagementPage() {
 
   const handleEdit = (product: ManagedProduct) => {
     setEditingId(product.id);
-    setForm(() => {
-      const next = toFormState(product);
-      if (next.category !== "album") return next;
-      const rootId =
-        albumRootCategoryId || findBackendRootCategoryId(adminCategories, "album") || "";
-      return rootId ? { ...next, categoryId: rootId } : next;
-    });
+    setForm(() => toFormState(product));
+    void loadSubcategoriesForMain(
+      product.mainCategoryId ?? "",
+      product.subcategoryId ?? "",
+    );
     setGalleryUrlDraft("");
     setSaveMessage(`Editing ${product.name}.`);
   };
@@ -548,6 +687,9 @@ export default function ProductManagementPage() {
   const handleCreateNew = () => {
     setEditingId(null);
     setForm(emptyForm());
+    subcategoryRequestRef.current += 1;
+    setSubcategories([]);
+    setSubcategoriesLoading(false);
     setGalleryUrlDraft("");
     setSaveMessage("Creating a new product.");
   };
@@ -727,11 +869,15 @@ export default function ProductManagementPage() {
                   <div className="flex flex-wrap items-center gap-2">
                     <h3 className="text-lg font-semibold">{item.name}</h3>
                     <span className="rounded-full bg-black/5 px-2 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-neutral-600 dark:bg-[#171711] dark:text-[#c7ba81]">
-                      {formatCategoryLabel(item.category)}
+                      {formatMainCategoryName(item.mainCategoryName) ||
+                        formatCategoryLabel(item.category)}
                     </span>
-                    {item.category !== "album" && item.subcategory ? (
+                    {item.subcategoryId &&
+                    item.subcategoryName &&
+                    formatMainCategoryName(item.subcategoryName) !==
+                      formatMainCategoryName(item.mainCategoryName) ? (
                       <span className="rounded-full bg-black/5 px-2 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-neutral-600 dark:bg-[#171711] dark:text-[#c7ba81]">
-                        {item.subcategory}
+                        {item.subcategoryName}
                       </span>
                     ) : null}
                   </div>
@@ -770,7 +916,7 @@ export default function ProductManagementPage() {
                     aria-label={`${stockButton.label} (click to set stock to 0)`}
                     title={`${stockButton.label} — click to set stock to 0`}
                   >
-                    Out of stock
+                    {stockButton.label}
                   </button>
                 </div>
                 </article>
@@ -827,17 +973,23 @@ export default function ProductManagementPage() {
 
             <div className="grid gap-4 sm:grid-cols-2">
               <select
-                value={form.category}
-                onChange={(event) =>
-                  handleCategoryChange(
-                    event.target.value as ManagedProduct["category"],
-                  )
-                }
-                className="h-11 rounded-2xl border border-neutral-300 bg-white px-4 text-sm outline-none transition focus:border-[#111827] dark:border-[#2f2a16] dark:bg-[#080808] dark:text-[#f1d04b] dark:focus:border-[#d9b92f]"
+                value={form.mainCategoryId}
+                disabled={mainCategoriesLoading}
+                onChange={(event) => handleMainCategoryChange(event.target.value)}
+                className="h-11 rounded-2xl border border-neutral-300 bg-white px-4 text-sm outline-none transition focus:border-[#111827] disabled:cursor-not-allowed disabled:opacity-60 dark:border-[#2f2a16] dark:bg-[#080808] dark:text-[#f1d04b] dark:focus:border-[#d9b92f]"
               >
-                <option value="cloth">Apparel</option>
-                <option value="album">Album</option>
-                <option value="accessories">Accessories</option>
+                <option value="" disabled hidden>
+                  {mainCategoriesLoading ? "Loading categories…" : "Select main category"}
+                </option>
+                {mainCategoryOptions.map((category) => (
+                  <option
+                    key={category.id}
+                    value={category.id}
+                    disabled={category.disabled}
+                  >
+                    {formatMainCategoryName(category.name)}
+                  </option>
+                ))}
               </select>
               <select
                 value={form.status}
@@ -856,38 +1008,28 @@ export default function ProductManagementPage() {
             </div>
 
             <select
-              value={form.categoryId}
-              disabled={adminCategoriesLoading || form.category === "album"}
-              onChange={(event) => handleBackendCategoryChange(event.target.value)}
+              value={form.subcategoryId}
+              disabled={
+                !form.mainCategoryId ||
+                isAlbumMainCategorySelected ||
+                subcategoriesLoading ||
+                subcategories.length === 0
+              }
+              onChange={(event) => setField("subcategoryId", event.target.value)}
               className="h-11 w-full rounded-2xl border border-neutral-300 bg-white px-4 text-sm outline-none transition focus:border-[#111827] disabled:cursor-not-allowed disabled:opacity-60 dark:border-[#2f2a16] dark:bg-[#080808] dark:text-[#f1d04b] dark:focus:border-[#d9b92f]"
             >
               <option value="" disabled hidden>
-                {adminCategoriesLoading
+                {subcategoriesLoading
                   ? "Loading categories…"
-                  : "Select backend category"}
+                  : "Select subcategory"}
               </option>
-              {adminCategoryTree.parents.map((parent) => {
-                const children =
-                  adminCategoryTree.childrenByParent.get(parent.id) ?? [];
-                if (children.length === 0) {
-                  return (
-                    <option key={parent.id} value={parent.id}>
-                      {parent.categoryName}
-                    </option>
-                  );
-                }
-                return (
-                  <optgroup key={parent.id} label={parent.categoryName}>
-                    {children.map((child) => (
-                      <option key={child.id} value={child.id}>
-                        {child.categoryName}
-                      </option>
-                    ))}
-                  </optgroup>
-                );
-              })}
+              {subcategories.map((subcategory) => (
+                <option key={subcategory.id} value={subcategory.id}>
+                  {subcategory.name}
+                </option>
+              ))}
             </select>
-            {form.category === "album" && !adminCategoriesLoading && !albumRootCategoryId ? (
+            {false ? (
               <p className="text-xs text-rose-600 dark:text-rose-300">
                 Album backend category is missing. Please add a top-level “Album” category in the backend first.
               </p>
