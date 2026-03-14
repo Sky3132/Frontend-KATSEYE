@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { api } from "../../lib/api";
+import { api, asNumber, asString, unwrapObject } from "../../lib/api";
 import {
   CURRENCY_STORAGE_KEY,
   currencyOptions,
@@ -10,6 +10,7 @@ import {
   type StoreCurrency,
 } from "../../user/lib/store-settings";
 import {
+  fetchAdminArchivedProducts,
   fetchAdminProducts,
   type Product as ManagedProduct,
 } from "../../user/lib/catalog-api";
@@ -35,6 +36,14 @@ type ProductFormState = {
 type ToastState = { message: string; tone: "success" | "error" } | null;
 type CategoryFilter = ManagedProduct["category"] | "all";
 type SubcategoryFilter = string | "all";
+
+type ConfirmDialogState =
+  | {
+      action: "archive" | "hard-delete";
+      productId: string;
+      productName: string;
+    }
+  | null;
 
 const parseCommaList = (value: string) =>
   value
@@ -66,18 +75,6 @@ const formatMainCategoryName = (value: string) => {
   if (normalized === "categories" || normalized === "category") return "ACCESSORIES";
   if (normalized === "album") return "ALBUM";
   return trimmed;
-};
-
-const mergeCategoryNodes = (left: CategoryNode[], right: CategoryNode[]) => {
-  const byId = new Map<string, CategoryNode>();
-  for (const node of left) {
-    if (node.id) byId.set(node.id, node);
-  }
-  for (const node of right) {
-    if (!node.id) continue;
-    if (!byId.has(node.id)) byId.set(node.id, node);
-  }
-  return Array.from(byId.values());
 };
 
 const formatCategoryLabel = (category: ManagedProduct["category"]) => {
@@ -212,19 +209,42 @@ const normalizeCategoryOptions = (value: unknown): { id: string; name: string }[
     .filter((row) => Boolean(row.id) && Boolean(row.name));
 };
 
+const normalizeCreatedCategory = (
+  value: unknown,
+): { id: string; name: string } | null => {
+  const record = unwrapObject(value);
+  if (!record) return null;
+
+  const id = asString(record.id);
+  const name = asString(record.category_name ?? record.categoryName ?? record.name);
+  if (!id || !name) return null;
+
+  return { id, name };
+};
+
 export default function ProductManagementPage() {
   const { currency, formatCurrency } = useStoreSettings();
+  const [view, setView] = useState<"active" | "archived">("active");
   const [items, setItems] = useState<ManagedProduct[]>([]);
+  const [archivedItems, setArchivedItems] = useState<ManagedProduct[]>([]);
   const [form, setForm] = useState<ProductFormState>(emptyForm);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [isFormModalOpen, setIsFormModalOpen] = useState(false);
+  const [confirmDialog, setConfirmDialog] = useState<ConfirmDialogState>(null);
+  const [confirmBusy, setConfirmBusy] = useState(false);
   const [search, setSearch] = useState("");
   const [categoryFilter, setCategoryFilter] = useState<CategoryFilter>("all");
   const [subcategoryFilter, setSubcategoryFilter] =
     useState<SubcategoryFilter>("all");
   const [mainCategories, setMainCategories] = useState<CategoryNode[]>([]);
   const [mainCategoriesLoading, setMainCategoriesLoading] = useState(true);
+  const [mainCategoriesError, setMainCategoriesError] = useState<string | null>(null);
   const [subcategories, setSubcategories] = useState<{ id: string; name: string }[]>([]);
   const [subcategoriesLoading, setSubcategoriesLoading] = useState(false);
+  const [mainCategoryDraft, setMainCategoryDraft] = useState("");
+  const [mainCategoryCreating, setMainCategoryCreating] = useState(false);
+  const [subcategoryDraft, setSubcategoryDraft] = useState("");
+  const [subcategoryCreating, setSubcategoryCreating] = useState(false);
   const [saveMessage, setSaveMessage] = useState(
     "Manage product catalog with CRUD.",
   );
@@ -239,11 +259,9 @@ export default function ProductManagementPage() {
       null,
     [mainCategories, form.mainCategoryId],
   );
-  const isAlbumMainCategorySelected =
-    form.mainCategoryId === "__missing_album__" ||
-    (selectedMainCategory
-      ? resolveTopLevelCategory(selectedMainCategory.name) === "album"
-      : false);
+  const isAlbumMainCategoryName =
+    selectedMainCategory?.name.trim().toLowerCase() === "album";
+  const isAlbumMainCategorySelected = isAlbumMainCategoryName;
 
   const setField = <K extends keyof ProductFormState>(
     key: K,
@@ -261,67 +279,79 @@ export default function ProductManagementPage() {
     toastTimerRef.current = setTimeout(() => setToast(null), 3500);
   };
 
-  useEffect(() => {
-    void fetchAdminProducts()
-      .then(setItems)
-      .catch(() => setItems([]));
-  }, []);
+  const reloadMainCategories = async () => {
+    setMainCategoriesLoading(true);
+    setMainCategoriesError(null);
 
-  useEffect(() => {
-    let cancelled = false;
-
-    const load = async () => {
-      const [adminResult, publicResult] = await Promise.allSettled([
-        api("/api/admin/categories/tree"),
-        api("/api/categories/tree"),
-      ]);
-
-      if (cancelled) return;
-
-      const adminNodes =
-        adminResult.status === "fulfilled"
-          ? normalizeCategoriesTree(adminResult.value)
-          : [];
-      const publicNodes =
-        publicResult.status === "fulfilled"
-          ? normalizeCategoriesTree(publicResult.value)
-          : [];
-
-      const merged = mergeCategoryNodes(adminNodes, publicNodes);
-      setMainCategories(merged);
-    };
-
-    void load().finally(() => {
-      if (cancelled) return;
+    try {
+      const response = await api("/api/admin/categories/tree");
+      const nodes = normalizeCategoriesTree(response);
+      setMainCategories(nodes);
+      return nodes;
+    } catch (error) {
+      setMainCategories([]);
+      const message =
+        error instanceof Error ? error.message : "Failed to load categories.";
+      setMainCategoriesError(message);
+      showToast("Failed to load categories.", "error");
+      return [];
+    } finally {
       setMainCategoriesLoading(false);
-    });
+    }
+  };
 
-    return () => {
-      cancelled = true;
-    };
+  const refetchActiveProducts = async () => {
+    try {
+      const next = await fetchAdminProducts();
+      setItems(next);
+      return next;
+    } catch {
+      setItems([]);
+      return [];
+    }
+  };
+
+  const refetchArchivedProducts = async () => {
+    try {
+      const next = await fetchAdminArchivedProducts();
+      setArchivedItems(next);
+      return next;
+    } catch {
+      setArchivedItems([]);
+      return [];
+    }
+  };
+
+  const refetchAllProducts = async () => {
+    await Promise.all([refetchActiveProducts(), refetchArchivedProducts()]);
+  };
+
+  useEffect(() => {
+    void refetchActiveProducts();
   }, []);
+
+  useEffect(() => {
+    void reloadMainCategories();
+  }, []);
+
+  useEffect(() => {
+    if (view !== "archived") return;
+    void refetchArchivedProducts();
+  }, [view]);
+
+  useEffect(() => {
+    if (view !== "archived") return;
+    if (editingId) setEditingId(null);
+    if (isFormModalOpen) setIsFormModalOpen(false);
+    setForm(emptyForm());
+  }, [editingId, isFormModalOpen, view]);
 
   const mainCategoryOptions = useMemo(() => {
+    if (mainCategories.length === 0) return [];
     const sorted = [...mainCategories].sort((a, b) =>
       a.name.localeCompare(b.name),
     );
-
-    const hasAlbum = sorted.some(
-      (item) => resolveTopLevelCategory(item.name) === "album",
-    );
-
-    if (hasAlbum) return sorted.map((item) => ({ ...item, disabled: false }));
-
-    return [
-      ...sorted.map((item) => ({ ...item, disabled: false })),
-      {
-        id: "__missing_album__",
-        name: "ALBUM",
-        slug: "album",
-        children: [],
-        disabled: false,
-      },
-    ];
+    return sorted.map((item) => ({ ...item, disabled: false }));
   }, [mainCategories]);
 
   useEffect(() => {
@@ -330,11 +360,37 @@ export default function ProductManagementPage() {
     };
   }, []);
 
+  useEffect(() => {
+    const isAnyModalOpen = isFormModalOpen || Boolean(confirmDialog);
+    if (!isAnyModalOpen) return;
+
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      if (confirmDialog) {
+        setConfirmDialog(null);
+        setConfirmBusy(false);
+        return;
+      }
+      setIsFormModalOpen(false);
+    };
+    window.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      document.body.style.overflow = prevOverflow;
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [confirmDialog, isFormModalOpen]);
+
+  const listItems = view === "archived" ? archivedItems : items;
+
   const searchedResolvedItems = useMemo(() => {
     const query = search.trim().toLowerCase();
-    if (!query) return items;
+    if (!query) return listItems;
 
-    return items.filter((item) => {
+    return listItems.filter((item) => {
       const haystack = [
         item.name,
         item.brand,
@@ -347,7 +403,7 @@ export default function ProductManagementPage() {
         .toLowerCase();
       return haystack.includes(query);
     });
-  }, [items, search]);
+  }, [listItems, search]);
 
   const visibleItems = useMemo(() => {
     if (categoryFilter === "all") return searchedResolvedItems;
@@ -434,33 +490,19 @@ export default function ProductManagementPage() {
     }
   };
 
-  const handleMainCategoryChange = (nextMainCategoryId: string) => {
+  const applyMainCategorySelection = (
+    nextMainCategoryId: string,
+    nextMainCategoryName?: string,
+  ) => {
     subcategoryRequestRef.current += 1;
     setSubcategories([]);
     setSubcategoriesLoading(false);
 
-    if (nextMainCategoryId === "__missing_album__") {
-      setForm((prev) => ({
-        ...prev,
-        category: "album",
-        mainCategoryId: nextMainCategoryId,
-        subcategoryId: "",
-        sizes: sanitizeSizesForCategory("album", prev.sizes),
-      }));
-      setSaveMessage(
-        "Album main category is missing in the backend. Create it first to add album products.",
-      );
-      showToast(
-        "Album main category is missing in the backend.",
-        "error",
-      );
-      return;
-    }
-
     const selected =
       mainCategories.find((item) => item.id === nextMainCategoryId) ?? null;
-    const nextCategory = selected
-      ? resolveTopLevelCategory(selected.name)
+    const resolvedLabel = nextMainCategoryName ?? selected?.name ?? "";
+    const nextCategory = resolvedLabel
+      ? resolveTopLevelCategory(resolvedLabel)
       : form.category;
 
     setForm((prev) => ({
@@ -472,6 +514,89 @@ export default function ProductManagementPage() {
     }));
 
     void loadSubcategoriesForMain(nextMainCategoryId, "");
+  };
+
+  const handleMainCategoryChange = (nextMainCategoryId: string) => {
+    applyMainCategorySelection(nextMainCategoryId);
+  };
+
+  const createMainCategory = async () => {
+    const name = mainCategoryDraft.trim();
+    if (!name) {
+      showToast("Enter a category name.", "error");
+      return;
+    }
+
+    setMainCategoryCreating(true);
+    try {
+      const response = await api("/api/admin/categories", {
+        method: "POST",
+        body: JSON.stringify({ category_name: name, parent_category_id: null }),
+      });
+      const created = normalizeCreatedCategory(response);
+      const nodes = await reloadMainCategories();
+      const selected =
+        (created?.id
+          ? nodes.find((node) => node.id === created.id) ?? null
+          : null) ??
+        nodes.find(
+          (node) => node.name.trim().toLowerCase() === name.toLowerCase(),
+        ) ??
+        null;
+
+      if (selected) {
+        applyMainCategorySelection(selected.id, selected.name);
+      }
+      setMainCategoryDraft("");
+      showToast("Category created.");
+    } catch {
+      showToast("Failed to create category.", "error");
+    } finally {
+      setMainCategoryCreating(false);
+    }
+  };
+
+  const createSubcategory = async () => {
+    const name = subcategoryDraft.trim();
+    if (!name) {
+      showToast("Enter a subcategory name.", "error");
+      return;
+    }
+
+    if (!form.mainCategoryId) {
+      showToast("Select a main category first.", "error");
+      return;
+    }
+
+    if (isAlbumMainCategoryName) {
+      showToast("Album does not support subcategories.", "error");
+      return;
+    }
+
+    const parentCategoryId = asNumber(form.mainCategoryId, Number.NaN);
+    if (!Number.isFinite(parentCategoryId)) {
+      showToast("Invalid main category id.", "error");
+      return;
+    }
+
+    setSubcategoryCreating(true);
+    try {
+      const response = await api("/api/admin/categories", {
+        method: "POST",
+        body: JSON.stringify({
+          category_name: name,
+          parent_category_id: parentCategoryId,
+        }),
+      });
+      const created = normalizeCreatedCategory(response);
+      setSubcategoryDraft("");
+      void loadSubcategoriesForMain(form.mainCategoryId, created?.id ?? "");
+      showToast("Subcategory created.");
+    } catch {
+      showToast("Failed to create subcategory.", "error");
+    } finally {
+      setSubcategoryCreating(false);
+    }
   };
 
   const nonClothVariantOptions =
@@ -538,14 +663,6 @@ export default function ProductManagementPage() {
 
     try {
       if (editingId) {
-        if (form.mainCategoryId === "__missing_album__") {
-          setSaveMessage(
-            "Album main category is missing in the backend. Create it first to edit album products.",
-          );
-          showToast("Album main category is missing in the backend.", "error");
-          return;
-        }
-
         const selectedMainCategoryId = Number(form.mainCategoryId);
         if (
           Number.isFinite(selectedMainCategoryId) &&
@@ -587,14 +704,6 @@ export default function ProductManagementPage() {
           }),
         });
       } else {
-        if (form.mainCategoryId === "__missing_album__") {
-          setSaveMessage(
-            "Album main category is missing in the backend. Create it first to add album products.",
-          );
-          showToast("Album main category is missing in the backend.", "error");
-          return;
-        }
-
         const primaryImage = form.image.trim();
         const images = normalizeGallery(primaryImage, form.gallery);
         const selectedMainCategoryId = Number(form.mainCategoryId);
@@ -660,6 +769,7 @@ export default function ProductManagementPage() {
         "success",
       );
       setEditingId(null);
+      setIsFormModalOpen(false);
       setForm(emptyForm());
       subcategoryRequestRef.current += 1;
       setSubcategories([]);
@@ -673,6 +783,84 @@ export default function ProductManagementPage() {
     }
   };
 
+  const archiveProduct = async (productId: string) => {
+    try {
+      await api(`/api/admin/products/${productId}`, { method: "DELETE" });
+      await refetchAllProducts();
+      setSaveMessage("Product archived.");
+      showToast("Product moved to archive.");
+      if (editingId === productId) setEditingId(null);
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Unable to archive product.";
+      setSaveMessage(message);
+      showToast(message, "error");
+    }
+  };
+
+  const handleResell = async (productId: string) => {
+    try {
+      await api(`/api/admin/products/${productId}/resell`, { method: "PATCH" });
+      await refetchAllProducts();
+      setSaveMessage("Product restored.");
+      showToast("Product returned to active catalog.");
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Unable to restore product.";
+      setSaveMessage(message);
+      showToast(message, "error");
+    }
+  };
+
+  const hardDeleteProduct = async (productId: string) => {
+    try {
+      await api(`/api/admin/products/${productId}/hard`, { method: "DELETE" });
+      await refetchAllProducts();
+      setSaveMessage("Product deleted.");
+      showToast("Product permanently deleted.");
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Unable to delete product.";
+      setSaveMessage(message);
+      showToast(message, "error");
+    }
+  };
+
+  const openConfirmArchive = (product: ManagedProduct) => {
+    setConfirmBusy(false);
+    setConfirmDialog({
+      action: "archive",
+      productId: product.id,
+      productName: product.name,
+    });
+  };
+
+  const openConfirmHardDelete = (product: ManagedProduct) => {
+    setConfirmBusy(false);
+    setConfirmDialog({
+      action: "hard-delete",
+      productId: product.id,
+      productName: product.name,
+    });
+  };
+
+  const handleConfirm = async () => {
+    if (!confirmDialog) return;
+    if (confirmBusy) return;
+
+    setConfirmBusy(true);
+    try {
+      if (confirmDialog.action === "archive") {
+        await archiveProduct(confirmDialog.productId);
+      } else {
+        await hardDeleteProduct(confirmDialog.productId);
+      }
+      setConfirmDialog(null);
+    } finally {
+      setConfirmBusy(false);
+    }
+  };
+
   const handleEdit = (product: ManagedProduct) => {
     setEditingId(product.id);
     setForm(() => toFormState(product));
@@ -682,6 +870,7 @@ export default function ProductManagementPage() {
     );
     setGalleryUrlDraft("");
     setSaveMessage(`Editing ${product.name}.`);
+    setIsFormModalOpen(true);
   };
 
   const handleCreateNew = () => {
@@ -692,6 +881,7 @@ export default function ProductManagementPage() {
     setSubcategoriesLoading(false);
     setGalleryUrlDraft("");
     setSaveMessage("Creating a new product.");
+    setIsFormModalOpen(true);
   };
 
   const setPrimaryImage = (value: string) => {
@@ -762,6 +952,191 @@ export default function ProductManagementPage() {
           </div>
         </div>
       ) : null}
+
+      {confirmDialog ? (
+        <div
+          className="fixed inset-0 z-50 grid place-items-center bg-black/60 p-4 backdrop-blur-sm"
+          onClick={() => {
+            if (confirmBusy) return;
+            setConfirmDialog(null);
+          }}
+          role="dialog"
+          aria-modal="true"
+          aria-label={
+            confirmDialog.action === "archive"
+              ? "Archive product"
+              : "Delete product"
+          }
+        >
+          <aside
+            className="w-full max-w-[520px] overflow-hidden rounded-[28px] bg-white shadow-2xl ring-1 ring-black/10 dark:bg-[#090909] dark:ring-[#2f2a16]"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="flex items-start justify-between gap-4 border-b border-black/5 px-5 py-4 dark:border-[#2f2a16]">
+              <div className="flex items-start gap-3">
+                <div
+                  className={`grid h-11 w-11 place-items-center rounded-2xl ring-1 ring-inset ${
+                    confirmDialog.action === "archive"
+                      ? "bg-amber-50 text-amber-700 ring-amber-200 dark:bg-amber-950/20 dark:text-amber-200 dark:ring-amber-500/30"
+                      : "bg-rose-50 text-rose-700 ring-rose-200 dark:bg-rose-950/20 dark:text-rose-200 dark:ring-rose-500/30"
+                  }`}
+                  aria-hidden="true"
+                >
+                  {confirmDialog.action === "archive" ? (
+                    <svg
+                      width="22"
+                      height="22"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      xmlns="http://www.w3.org/2000/svg"
+                    >
+                      <path
+                        d="M21 7V20a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7"
+                        stroke="currentColor"
+                        strokeWidth="1.8"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                      <path
+                        d="M3 7h18"
+                        stroke="currentColor"
+                        strokeWidth="1.8"
+                        strokeLinecap="round"
+                      />
+                      <path
+                        d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"
+                        stroke="currentColor"
+                        strokeWidth="1.8"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                    </svg>
+                  ) : (
+                    <svg
+                      width="22"
+                      height="22"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      xmlns="http://www.w3.org/2000/svg"
+                    >
+                      <path
+                        d="M10 12v6"
+                        stroke="currentColor"
+                        strokeWidth="1.8"
+                        strokeLinecap="round"
+                      />
+                      <path
+                        d="M14 12v6"
+                        stroke="currentColor"
+                        strokeWidth="1.8"
+                        strokeLinecap="round"
+                      />
+                      <path
+                        d="M4 7h16"
+                        stroke="currentColor"
+                        strokeWidth="1.8"
+                        strokeLinecap="round"
+                      />
+                      <path
+                        d="M6 7l1 14a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-14"
+                        stroke="currentColor"
+                        strokeWidth="1.8"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                      <path
+                        d="M9 7V5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2"
+                        stroke="currentColor"
+                        strokeWidth="1.8"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                    </svg>
+                  )}
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-neutral-700 dark:text-[#c7ba81]">
+                    {confirmDialog.action === "archive"
+                      ? "Archive product"
+                      : "Permanently delete"}
+                  </p>
+                  <h2 className="mt-0.5 text-xl font-semibold tracking-tight">
+                    {confirmDialog.action === "archive"
+                      ? "Move this product to archive?"
+                      : "Delete this product?"}
+                  </h2>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  if (confirmBusy) return;
+                  setConfirmDialog(null);
+                }}
+                className="grid h-10 w-10 place-items-center rounded-2xl border border-neutral-300 text-lg leading-none transition hover:bg-neutral-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-[#2f2a16] dark:hover:bg-[#0b0b0a]"
+                aria-label="Close"
+                title="Close"
+                disabled={confirmBusy}
+              >
+                ×
+              </button>
+            </div>
+
+            <div className="px-5 pb-5 pt-4">
+              <p className="text-sm text-neutral-600 dark:text-[#c7ba81]">
+                {confirmDialog.action === "archive" ? (
+                  <>
+                    This will hide{" "}
+                    <span className="font-semibold text-neutral-900 dark:text-[#f1d04b]">
+                      {confirmDialog.productName}
+                    </span>{" "}
+                    from the active catalog. You can restore it from the Archive
+                    tab anytime.
+                  </>
+                ) : (
+                  <>
+                    This will permanently remove{" "}
+                    <span className="font-semibold text-neutral-900 dark:text-[#f1d04b]">
+                      {confirmDialog.productName}
+                    </span>
+                    . This action cannot be undone.
+                  </>
+                )}
+              </p>
+
+              <div className="mt-5 flex flex-wrap gap-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (confirmBusy) return;
+                    setConfirmDialog(null);
+                  }}
+                  className="h-11 flex-1 rounded-2xl border border-neutral-300 bg-white px-4 text-sm font-semibold text-neutral-700 transition hover:bg-neutral-50 disabled:cursor-not-allowed disabled:opacity-60 dark:border-[#2f2a16] dark:bg-[#080808] dark:text-[#f1d04b] dark:hover:bg-[#0b0b0a]"
+                  disabled={confirmBusy}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void handleConfirm()}
+                  className={`h-11 flex-1 rounded-2xl px-4 text-sm font-semibold text-white transition disabled:cursor-not-allowed disabled:opacity-60 ${
+                    confirmDialog.action === "archive"
+                      ? "bg-amber-600 hover:bg-amber-700 dark:bg-amber-500 dark:text-[#090909] dark:hover:bg-amber-400"
+                      : "bg-rose-600 hover:bg-rose-700 dark:bg-rose-500 dark:text-white dark:hover:bg-rose-400"
+                  }`}
+                  disabled={confirmBusy}
+                >
+                  {confirmBusy
+                    ? "Working…"
+                    : confirmDialog.action === "archive"
+                      ? "Archive"
+                      : "Delete"}
+                </button>
+              </div>
+            </div>
+          </aside>
+        </div>
+      ) : null}
       <header className="flex flex-wrap items-center justify-between gap-4">
         <div>
           <p className="text-sm font-medium text-[#4f5ae0] dark:text-[#b59b39]">
@@ -774,23 +1149,55 @@ export default function ProductManagementPage() {
             {saveMessage}
           </p>
         </div>
-        <button
-          type="button"
-          onClick={handleCreateNew}
-          className="rounded-2xl bg-[#111827] px-4 py-3 text-sm font-medium text-white dark:bg-[#f1d04b] dark:text-[#090909]"
-        >
-          Add New Product
-        </button>
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="inline-flex rounded-2xl border border-neutral-300 bg-white p-1 dark:border-[#2f2a16] dark:bg-[#080808]">
+            <button
+              type="button"
+              onClick={() => setView("active")}
+              className={`h-10 rounded-2xl px-4 text-sm font-medium transition ${
+                view === "active"
+                  ? "bg-[#111827] text-white dark:bg-[#f1d04b] dark:text-[#090909]"
+                  : "text-neutral-600 hover:bg-neutral-50 dark:text-[#c7ba81] dark:hover:bg-[#0b0b0a]"
+              }`}
+              aria-pressed={view === "active"}
+            >
+              Active
+            </button>
+            <button
+              type="button"
+              onClick={() => setView("archived")}
+              className={`h-10 rounded-2xl px-4 text-sm font-medium transition ${
+                view === "archived"
+                  ? "bg-[#111827] text-white dark:bg-[#f1d04b] dark:text-[#090909]"
+                  : "text-neutral-600 hover:bg-neutral-50 dark:text-[#c7ba81] dark:hover:bg-[#0b0b0a]"
+              }`}
+              aria-pressed={view === "archived"}
+            >
+              Archive
+            </button>
+          </div>
+          <button
+            type="button"
+            disabled={view === "archived"}
+            onClick={handleCreateNew}
+            className="rounded-2xl bg-[#111827] px-4 py-3 text-sm font-medium text-white transition disabled:cursor-not-allowed disabled:opacity-60 dark:bg-[#f1d04b] dark:text-[#090909] dark:disabled:bg-[#665a33]"
+          >
+            Add New Product
+          </button>
+        </div>
       </header>
 
-      <div className="grid gap-6 xl:grid-cols-[minmax(0,1.15fr)_420px]">
+      <div className="grid gap-6">
         <div className="rounded-[28px] bg-white p-5 shadow-sm ring-1 ring-black/5 dark:bg-[#090909] dark:ring-[#2f2a16]">
           <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
             <div>
-              <h2 className="text-2xl font-semibold">Catalog</h2>
+              <h2 className="text-2xl font-semibold">
+                {view === "archived" ? "Archive" : "Catalog"}
+              </h2>
               <p className="text-sm text-neutral-500 dark:text-[#c7ba81]">
                 {subcategoryItems.length} product
-                {subcategoryItems.length === 1 ? "" : "s"} shown - {categoryLabel}
+                {subcategoryItems.length === 1 ? "" : "s"} shown -{" "}
+                {view === "archived" ? "Archived" : "Active"} - {categoryLabel}
               </p>
             </div>
             <div className="flex w-full flex-col gap-3 sm:w-auto sm:flex-row sm:items-center">
@@ -894,30 +1301,59 @@ export default function ProductManagementPage() {
                   </div>
                 </div>
                 <div className="flex items-start gap-2">
-                  <button
-                    type="button"
-                    onClick={() => handleEdit(item)}
-                    className="rounded-xl border border-neutral-300 px-3 py-2 text-sm font-medium dark:border-[#2f2a16]"
-                  >
-                    Edit
-                  </button>
-                  <button
-                    type="button"
-                    disabled={Boolean(editingId) || item.stock <= 0}
-                    onClick={async () => {
-                      await api(`/api/admin/products/${item.id}/stock`, {
-                        method: "PATCH",
-                        body: JSON.stringify({ stock: 0 }),
-                      });
-                      const nextItems = await fetchAdminProducts();
-                      saveItems(nextItems, "Stock updated.");
-                    }}
-                    className={`rounded-xl border px-3 py-2 text-sm font-medium transition disabled:cursor-not-allowed disabled:opacity-50 ${stockButton.className}`}
-                    aria-label={`${stockButton.label} (click to set stock to 0)`}
-                    title={`${stockButton.label} — click to set stock to 0`}
-                  >
-                    {stockButton.label}
-                  </button>
+                  {view === "active" ? (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => handleEdit(item)}
+                        className="rounded-xl border border-neutral-300 px-3 py-2 text-sm font-medium dark:border-[#2f2a16]"
+                      >
+                        Edit
+                      </button>
+                      <button
+                        type="button"
+                        disabled={Boolean(editingId) || item.stock <= 0}
+                        onClick={async () => {
+                          await api(`/api/admin/products/${item.id}/stock`, {
+                            method: "PATCH",
+                            body: JSON.stringify({ stock: 0 }),
+                          });
+                          const nextItems = await fetchAdminProducts();
+                          saveItems(nextItems, "Stock updated.");
+                        }}
+                        className={`rounded-xl border px-3 py-2 text-sm font-medium transition disabled:cursor-not-allowed disabled:opacity-50 ${stockButton.className}`}
+                        aria-label={`${stockButton.label} (click to set stock to 0)`}
+                        title={`${stockButton.label} — click to set stock to 0`}
+                      >
+                        {stockButton.label}
+                      </button>
+                      <button
+                        type="button"
+                        disabled={Boolean(editingId)}
+                        onClick={() => openConfirmArchive(item)}
+                        className="rounded-xl border border-neutral-300 px-3 py-2 text-sm font-medium text-rose-600 transition disabled:cursor-not-allowed disabled:opacity-50 dark:border-[#2f2a16] dark:text-rose-300"
+                      >
+                        Remove
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => void handleResell(item.id)}
+                        className="rounded-xl border border-neutral-300 px-3 py-2 text-sm font-medium text-emerald-700 transition hover:bg-emerald-50 dark:border-[#2f2a16] dark:text-emerald-200 dark:hover:bg-emerald-950/20"
+                      >
+                        Resell
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => openConfirmHardDelete(item)}
+                        className="rounded-xl border border-neutral-300 px-3 py-2 text-sm font-medium text-rose-600 transition hover:bg-rose-50 dark:border-[#2f2a16] dark:text-rose-300 dark:hover:bg-rose-950/20"
+                      >
+                        Delete
+                      </button>
+                    </>
+                  )}
                 </div>
                 </article>
               );
@@ -925,17 +1361,39 @@ export default function ProductManagementPage() {
           </div>
         </div>
 
-        <aside className="rounded-[28px] bg-white p-5 shadow-sm ring-1 ring-black/5 dark:bg-[#090909] dark:ring-[#2f2a16]">
-          <div className="mb-5">
-            <p className="text-sm font-medium text-[#4f5ae0] dark:text-[#b59b39]">
-              {editingId ? "Edit Product" : "Create Product"}
-            </p>
-            <h2 className="text-2xl font-semibold">
-              {editingId ? form.name || "Selected Product" : "New Product"}
-            </h2>
-          </div>
+        {isFormModalOpen ? (
+          <div
+            className="fixed inset-0 z-40 grid place-items-center bg-black/60 p-4 backdrop-blur-sm"
+            onClick={() => setIsFormModalOpen(false)}
+            role="dialog"
+            aria-modal="true"
+            aria-label={editingId ? "Edit product" : "Create product"}
+          >
+            <aside
+              className="max-h-[min(86vh,980px)] w-full max-w-[560px] overflow-y-auto rounded-[28px] bg-white p-5 shadow-sm ring-1 ring-black/5 dark:bg-[#090909] dark:ring-[#2f2a16]"
+              onClick={(event) => event.stopPropagation()}
+            >
+              <div className="mb-5 flex items-start justify-between gap-4">
+                <div>
+                  <p className="text-sm font-medium text-[#4f5ae0] dark:text-[#b59b39]">
+                    {editingId ? "Edit Product" : "Create Product"}
+                  </p>
+                  <h2 className="text-2xl font-semibold">
+                    {editingId ? form.name || "Selected Product" : "New Product"}
+                  </h2>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsFormModalOpen(false)}
+                  className="grid h-10 w-10 place-items-center rounded-2xl border border-neutral-300 text-lg leading-none transition hover:bg-neutral-50 dark:border-[#2f2a16] dark:hover:bg-[#0b0b0a]"
+                  aria-label="Close"
+                  title="Close"
+                >
+                  ×
+                </button>
+              </div>
 
-          <div className="space-y-4">
+              <div className="space-y-4">
             <div className="grid gap-4 sm:grid-cols-2">
               <input
                 value={form.name}
@@ -972,25 +1430,91 @@ export default function ProductManagementPage() {
             </div>
 
             <div className="grid gap-4 sm:grid-cols-2">
-              <select
-                value={form.mainCategoryId}
-                disabled={mainCategoriesLoading}
-                onChange={(event) => handleMainCategoryChange(event.target.value)}
-                className="h-11 rounded-2xl border border-neutral-300 bg-white px-4 text-sm outline-none transition focus:border-[#111827] disabled:cursor-not-allowed disabled:opacity-60 dark:border-[#2f2a16] dark:bg-[#080808] dark:text-[#f1d04b] dark:focus:border-[#d9b92f]"
-              >
-                <option value="" disabled hidden>
-                  {mainCategoriesLoading ? "Loading categories…" : "Select main category"}
-                </option>
-                {mainCategoryOptions.map((category) => (
-                  <option
-                    key={category.id}
-                    value={category.id}
-                    disabled={category.disabled}
+              {mainCategoriesError ? (
+                <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700 dark:border-rose-500/30 dark:bg-rose-950/20 dark:text-rose-200">
+                  <p className="font-medium">Failed to load categories.</p>
+                  <p className="mt-1 text-xs opacity-80">{mainCategoriesError}</p>
+                  <button
+                    type="button"
+                    onClick={() => void reloadMainCategories()}
+                    className="mt-3 inline-flex h-9 items-center justify-center rounded-xl bg-rose-600 px-3 text-xs font-semibold text-white transition hover:bg-rose-700 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-rose-700 dark:hover:bg-rose-600"
                   >
-                    {formatMainCategoryName(category.name)}
-                  </option>
-                ))}
-              </select>
+                    Retry
+                  </button>
+                </div>
+              ) : mainCategoriesLoading ? (
+                <select
+                  value=""
+                  disabled
+                  className="h-11 rounded-2xl border border-neutral-300 bg-white px-4 text-sm outline-none transition disabled:cursor-not-allowed disabled:opacity-60 dark:border-[#2f2a16] dark:bg-[#080808] dark:text-[#f1d04b]"
+                >
+                  <option>Loading categories…</option>
+                </select>
+              ) : mainCategories.length === 0 ? (
+                <div className="rounded-2xl border border-neutral-300 bg-white p-3 dark:border-[#2f2a16] dark:bg-[#080808]">
+                  <p className="text-xs font-medium text-neutral-600 dark:text-[#c7ba81]">
+                    No main categories yet
+                  </p>
+                  <div className="mt-2 flex gap-2">
+                    <input
+                      value={mainCategoryDraft}
+                      onChange={(event) => setMainCategoryDraft(event.target.value)}
+                      placeholder="New main category (e.g. APPAREL)"
+                      className="h-10 w-full rounded-xl border border-neutral-300 bg-white px-3 text-sm outline-none transition focus:border-[#111827] dark:border-[#2f2a16] dark:bg-[#080808] dark:text-[#f1d04b] dark:focus:border-[#d9b92f]"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => void createMainCategory()}
+                      disabled={mainCategoryCreating}
+                      className="inline-flex h-10 shrink-0 items-center justify-center rounded-xl bg-[#111827] px-4 text-sm font-semibold text-white transition hover:bg-black disabled:cursor-not-allowed disabled:opacity-60 dark:bg-[#d9b92f] dark:text-black dark:hover:bg-[#f1d04b]"
+                      aria-label="Add main category"
+                      title="Add"
+                    >
+                      +
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="rounded-2xl border border-neutral-300 bg-white p-3 dark:border-[#2f2a16] dark:bg-[#080808]">
+                  <select
+                    value={form.mainCategoryId}
+                    onChange={(event) => handleMainCategoryChange(event.target.value)}
+                    className="h-10 w-full rounded-xl border border-neutral-300 bg-white px-3 text-sm outline-none transition focus:border-[#111827] dark:border-[#2f2a16] dark:bg-[#080808] dark:text-[#f1d04b] dark:focus:border-[#d9b92f]"
+                  >
+                    <option value="" disabled hidden>
+                      Select main category
+                    </option>
+                    {mainCategoryOptions.map((category) => (
+                      <option
+                        key={category.id}
+                        value={category.id}
+                        disabled={category.disabled}
+                      >
+                        {formatMainCategoryName(category.name)}
+                      </option>
+                    ))}
+                  </select>
+
+                  <div className="mt-2 flex gap-2">
+                    <input
+                      value={mainCategoryDraft}
+                      onChange={(event) => setMainCategoryDraft(event.target.value)}
+                      placeholder="Add main category"
+                      className="h-10 w-full rounded-xl border border-neutral-300 bg-white px-3 text-sm outline-none transition focus:border-[#111827] dark:border-[#2f2a16] dark:bg-[#080808] dark:text-[#f1d04b] dark:focus:border-[#d9b92f]"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => void createMainCategory()}
+                      disabled={mainCategoryCreating}
+                      className="inline-flex h-10 shrink-0 items-center justify-center rounded-xl bg-[#111827] px-4 text-sm font-semibold text-white transition hover:bg-black disabled:cursor-not-allowed disabled:opacity-60 dark:bg-[#d9b92f] dark:text-black dark:hover:bg-[#f1d04b]"
+                      aria-label="Add main category"
+                      title="Add"
+                    >
+                      +
+                    </button>
+                  </div>
+                </div>
+              )}
               <select
                 value={form.status}
                 onChange={(event) =>
@@ -1029,6 +1553,38 @@ export default function ProductManagementPage() {
                 </option>
               ))}
             </select>
+            {Boolean(form.mainCategoryId) && !isAlbumMainCategoryName ? (
+              <div className="rounded-2xl border border-neutral-300 bg-white p-3 dark:border-[#2f2a16] dark:bg-[#080808]">
+                <div className="flex items-center justify-between gap-3">
+                  <p className="text-xs font-medium text-neutral-600 dark:text-[#c7ba81]">
+                    Add subcategory
+                  </p>
+                  {!subcategoriesLoading && subcategories.length === 0 ? (
+                    <span className="text-[11px] text-neutral-500 dark:text-[#8e7727]">
+                      None yet
+                    </span>
+                  ) : null}
+                </div>
+                <div className="mt-2 flex gap-2">
+                  <input
+                    value={subcategoryDraft}
+                    onChange={(event) => setSubcategoryDraft(event.target.value)}
+                    placeholder="New subcategory (e.g. T-Shirts)"
+                    className="h-10 w-full rounded-xl border border-neutral-300 bg-white px-3 text-sm outline-none transition focus:border-[#111827] dark:border-[#2f2a16] dark:bg-[#080808] dark:text-[#f1d04b] dark:focus:border-[#d9b92f]"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => void createSubcategory()}
+                    disabled={subcategoryCreating || subcategoriesLoading}
+                    className="inline-flex h-10 shrink-0 items-center justify-center rounded-xl bg-[#111827] px-4 text-sm font-semibold text-white transition hover:bg-black disabled:cursor-not-allowed disabled:opacity-60 dark:bg-[#d9b92f] dark:text-black dark:hover:bg-[#f1d04b]"
+                    aria-label="Add subcategory"
+                    title="Add"
+                  >
+                    +
+                  </button>
+                </div>
+              </div>
+            ) : null}
             {false ? (
               <p className="text-xs text-rose-600 dark:text-rose-300">
                 Album backend category is missing. Please add a top-level “Album” category in the backend first.
@@ -1290,7 +1846,9 @@ export default function ProductManagementPage() {
               </button>
             </div>
           </div>
-        </aside>
+            </aside>
+          </div>
+        ) : null}
       </div>
     </section>
   );

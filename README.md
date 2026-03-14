@@ -16,17 +16,12 @@ bun dev
 
 Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Public Tracking (no login)
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+This repo includes public tracking pages that are intentionally **not** behind auth middleware, so customers can open them from an email link without logging in:
 
-## Public Parcel Tracking (no login)
-
-This repo includes a public tracking page at:
-
-- `GET /track/:token` (example: `/track/abC123...`)
-
-It is intentionally **not** behind auth middleware, so customers can open it from an email link without logging in.
+- Order tracking: `GET /track-order/:token` (example: `/track-order/abC123...`)
+- Parcel tracking: `GET /track/:token` (example: `/track/abC123...`)
 
 ### Configure API base
 
@@ -36,29 +31,67 @@ Set the backend base URL (no trailing `/api`) via:
 
 ### Email sending
 
-The backend sends the designed â€œThank you for your purchaseâ€ email when an order is marked **paid** (admin action). The frontend should **not** call `/api/mail/test` (itâ€™s removed).
+The backend sends the designed "Thank you for your purchase" email when an order is marked **paid** (admin action).
 
-Email HTML template reference (frontend):
+Email template references (frontend):
 
-- `frontend-katseye/app/lib/emails/purchaseThankYouEmail.ts`
-- `frontend-katseye/app/lib/emails/cartReminderEmail.ts`
+- `app/lib/emails/purchaseThankYouEmail.ts`
+- `app/lib/emails/parcelTrackingEmail.ts`
 
 Backend requirements (for local dev):
 
-- Backend running: `cmd /c npm run start:dev` (API on `http://localhost:3001/api`).
+- Backend running (API on `http://localhost:3001/api`).
 - CORS allowed: backend `.env` `FRONTEND_ORIGIN` must match your frontend dev URL (example: `http://localhost:3000`).
 
 Flow:
 
 - Checkout creates an order (typically `pending`).
 - Admin marks it paid: `PATCH /api/admin/orders/:id/status` with `{ "status": "paid" }`.
-- Backend sends the thank-you email (black/yellow theme) with a â€œTrack my orderâ€ button.
+- Backend sends the thank-you email (black/yellow theme) with a "Track my order" button linking to `/track-order/:token`.
 
-### Backend endpoint contract (required)
+## Backend endpoint contracts (required)
 
-The tracking page calls the backend:
+The public tracking pages call the backend (no cookies required):
 
-- `GET {API_BASE}/api/public/parcels/track/:token`
+- Order tracking page: `GET {API_BASE}/api/public/orders/track/:token`
+- Parcel tracking page: `GET {API_BASE}/api/public/parcels/track/:token`
+
+### Order tracking response (example)
+
+Return JSON similar to:
+
+```json
+{
+  "token": "abC123",
+  "order_number": "ORD-10001",
+  "tracker_status": "shipped",
+  "status": "paid",
+  "order_date": "2026-03-11T10:30:00.000Z",
+  "customer_email": "customer@example.com",
+  "address": {
+    "line1": "123 Main St",
+    "city": "City",
+    "country": "Country"
+  },
+  "shipment": {
+    "carrier": "DHL",
+    "tracking_number": "DHL-AB12CD34EF56"
+  },
+  "timeline": [
+    { "title": "Order placed", "timestamp": "2026-03-11T10:30:00.000Z", "active": true },
+    { "title": "Payment confirmed", "timestamp": "2026-03-11T10:35:00.000Z", "active": true },
+    { "title": "Order shipped", "timestamp": "2026-03-12T08:00:00.000Z", "active": true }
+  ],
+  "last_updated_at": "2026-03-12T08:00:00.000Z"
+}
+```
+
+Notes:
+
+- The response can be snake_case or camelCase; the page normalizes both.
+- If you don’t have a timeline yet, omit `timeline` and the page will show a fallback timeline from the current status.
+
+### Parcel tracking response (example)
 
 Return JSON similar to:
 
@@ -79,15 +112,13 @@ Return JSON similar to:
 
 Notes:
 
-- If you omit `destinationLat`/`destinationLng`, the page still works, but the map shows a placeholder.
-- The endpoint must be public and must not require cookies.
+- If you omit `destinationLat`/`destinationLng`, the parcel page still works, but the map shows a placeholder.
 
-### Email template reference (backend should send the email)
+### Backend implementation notes
 
-Use `app/lib/emails/parcelTrackingEmail.ts` as the reference template. After a successful payment on the backend:
-
-1. Create a parcel record with a random `token` (store it with the order + customer email).
-2. Send the email containing a link to the frontend tracking page: `{SITE_URL}/track/{token}`.
+- Generate and store an unguessable public token per order (e.g., `public_tracking_token`) and return it in your payment/confirmation flow so the email can link to `{SITE_URL}/track-order/{token}`.
+- When admin sets status to `shipped`, generate and persist `shipment.carrier` and `shipment.tracking_number` for that order if missing. These fields are displayed on `/track-order/:token` and will later support “search by tracking number” UI.
+- If you add “search by tracking number” later, require an additional secret (e.g., email) or another token to avoid enumeration.
 
 Suggested env for the backend:
 
@@ -107,3 +138,4 @@ You can check out [the Next.js GitHub repository](https://github.com/vercel/next
 The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
 
 Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+

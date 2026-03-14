@@ -19,7 +19,7 @@ export async function api<T = unknown>(path: string, options: RequestInit = {}):
   const normalizedPath = path.startsWith("/") ? path : `/${path}`;
   const response = await fetch(`${baseUrl}${normalizedPath}`, {
     ...options,
-    credentials: "include",
+    credentials: options.credentials ?? "include",
     cache: options.cache ?? "no-store",
     headers: {
       "Content-Type": "application/json",
@@ -27,13 +27,11 @@ export async function api<T = unknown>(path: string, options: RequestInit = {}):
     },
   });
 
-  if (response.status === 401) throw new Error("UNAUTH");
-  if (response.status === 403) throw new Error("FORBIDDEN");
-
   if (response.status === 204) return undefined as T;
 
   if (!response.ok) {
-    throw new Error(`HTTP_${response.status}`);
+    const message = (await response.text().catch(() => "")).trim();
+    throw new Error(message || `HTTP_${response.status}`);
   }
 
   const contentType = response.headers.get("content-type") ?? "";

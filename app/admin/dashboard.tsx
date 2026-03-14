@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { api, asNumber, asString, unwrapList, unwrapObject } from "../lib/api";
 
@@ -17,6 +18,7 @@ type RecentOrder = {
   orderNumber: string;
   userEmail: string;
   userName: string;
+  itemTitles: string[];
   totalAmount: number;
   status: OrderStatus;
   orderDate: string;
@@ -147,6 +149,41 @@ const normalizeOrderStatus = (value: unknown): OrderStatus => {
   return "pending";
 };
 
+const extractRecentOrderItemTitles = (record: Record<string, unknown>) => {
+  const candidates =
+    record.items ??
+    record.order_items ??
+    record.orderItems ??
+    record.products ??
+    record.line_items ??
+    record.lineItems;
+  const raw = Array.isArray(candidates) ? candidates : [];
+  const titles = raw
+    .map((item) => unwrapObject(item))
+    .filter((item): item is Record<string, unknown> => item !== null)
+    .map((item) => {
+      const product = unwrapObject(item.product) ?? unwrapObject(item.item);
+      const title = asString(
+        item.title ??
+          item.name ??
+          item.product_title ??
+          item.productTitle ??
+          product?.title ??
+          product?.name ??
+          "",
+      );
+      const variant = asString(item.variant_name ?? item.variantName ?? "");
+      const quantity = asNumber(item.quantity ?? item.qty ?? item.count, Number.NaN);
+      if (!title) return "";
+      const suffix = variant ? ` (${variant})` : "";
+      const qty = Number.isFinite(quantity) && quantity > 1 ? ` x${Math.floor(quantity)}` : "";
+      return `${title}${suffix}${qty}`;
+    })
+    .filter(Boolean);
+
+  return Array.from(new Set(titles)).slice(0, 3);
+};
+
 const normalizeRecentOrders = (value: unknown): RecentOrder[] => {
   const record = unwrapObject(value);
   if (!record) return [];
@@ -169,6 +206,7 @@ const normalizeRecentOrders = (value: unknown): RecentOrder[] => {
         orderNumber: asString(item.order_number ?? item.orderNumber ?? ""),
         userEmail: asString(item.user_email ?? item.userEmail ?? ""),
         userName: asString(item.user_name ?? item.userName ?? ""),
+        itemTitles: extractRecentOrderItemTitles(item),
         totalAmount: asNumber(item.total_amount ?? item.totalAmount),
         status: normalizeOrderStatus(item.status),
         orderDate: asString(item.order_date ?? item.orderDate ?? ""),
@@ -316,7 +354,6 @@ export default function AdminDashboard() {
   const [stockLoading, setStockLoading] = useState(true);
   const [recentOrders, setRecentOrders] = useState<RecentOrder[]>([]);
   const [recentOrdersLoading, setRecentOrdersLoading] = useState(true);
-  const [updatingOrderId, setUpdatingOrderId] = useState<string | null>(null);
   const [lastSaved, setLastSaved] = useState("Not saved yet");
   const [mostSoldItems, setMostSoldItems] = useState<MostSoldProductItem[]>([]);
   const [bestSeller, setBestSeller] = useState<MostSoldProductItem | null>(null);
@@ -526,26 +563,6 @@ export default function AdminDashboard() {
   );
   const currency = useMemo(() => getCurrencyFormatter(), []);
 
-  const updateOrderStatus = async (id: string, status: OrderStatus) => {
-    const previous = recentOrders.find((item) => item.id === id)?.status ?? "pending";
-    setRecentOrders((prev) => prev.map((item) => (item.id === id ? { ...item, status } : item)));
-    setUpdatingOrderId(id);
-
-    try {
-      await api(`/api/admin/orders/${id}/status`, {
-        method: "PATCH",
-        body: JSON.stringify({ status }),
-      });
-      await refreshStocks();
-    } catch {
-      setRecentOrders((prev) =>
-        prev.map((item) => (item.id === id ? { ...item, status: previous } : item))
-      );
-    } finally {
-      setUpdatingOrderId((current) => (current === id ? null : current));
-    }
-  };
-
   const saveChanges = () => {
     const now = new Date();
     setLastSaved(now.toLocaleTimeString());
@@ -718,32 +735,52 @@ export default function AdminDashboard() {
                 </div>
               ) : (
                 recentOrders.map((order) => (
-                  <div
+                  <Link
                     key={order.id}
-                    className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-neutral-200 px-3 py-2 dark:border-[#2f2a16] dark:bg-[#11110f]"
+                    href={{
+                      pathname: "/admin/order_tracker",
+                      query: {
+                        orderId: order.id,
+                        orderNumber: order.orderNumber,
+                        userEmail: order.userEmail,
+                        userName: order.userName,
+                      },
+                    }}
+                    className="group block rounded-xl border border-neutral-200 px-3 py-2 transition hover:border-neutral-300 hover:bg-black/5 dark:border-[#2f2a16] dark:bg-[#11110f] dark:hover:bg-[#0b0b0a]"
+                    aria-label={`View order ${order.orderNumber || order.id} in Order Tracker`}
                   >
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-medium">#{order.orderNumber}</p>
-                      <p className="truncate text-xs text-neutral-500">
-                        {order.userEmail || order.userName}
-                      </p>
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <p className="truncate text-sm font-medium">
+                            #{order.orderNumber || order.id}
+                          </p>
+                          <span
+                            className={`rounded-full px-2 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] ${statusPill(order.status)}`}
+                          >
+                            {order.status}
+                          </span>
+                        </div>
+                        <p className="truncate text-xs text-neutral-500">
+                          {order.userEmail || order.userName}
+                        </p>
+                        {order.itemTitles.length > 0 ? (
+                          <p className="mt-1 truncate text-xs text-neutral-500">
+                            {order.itemTitles.join(", ")}
+                          </p>
+                        ) : null}
+                      </div>
+
+                      <div className="flex items-center gap-3">
+                        <p className="text-sm font-semibold">
+                          ${Number.isFinite(order.totalAmount) ? order.totalAmount.toFixed(2) : "0.00"}
+                        </p>
+                        <span className="text-neutral-400 transition group-hover:translate-x-0.5 dark:text-[#8e7727]">
+                          →
+                        </span>
+                      </div>
                     </div>
-                    <p className="text-sm font-semibold">
-                      ${Number.isFinite(order.totalAmount) ? order.totalAmount.toFixed(2) : "0.00"}
-                    </p>
-                    <select
-                      value={order.status}
-                      disabled={!order.id || updatingOrderId === order.id}
-                      onChange={(event) =>
-                        void updateOrderStatus(order.id, event.target.value as OrderStatus)
-                      }
-                      className="rounded-lg border border-neutral-300 px-2 py-1 text-xs disabled:cursor-not-allowed disabled:opacity-60 dark:border-[#2f2a16] dark:bg-[#080808]"
-                    >
-                      <option value="pending">Pending</option>
-                      <option value="shipped">Shipped</option>
-                      <option value="delivered">Delivered</option>
-                    </select>
-                  </div>
+                  </Link>
                 ))
               )}
             </div>

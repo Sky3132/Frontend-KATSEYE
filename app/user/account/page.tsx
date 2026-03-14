@@ -163,8 +163,11 @@ export default function AccountPage() {
 
   const describeCancelError = (error: unknown) => {
     const message = error instanceof Error ? error.message : "";
-    if (message === "UNAUTH") return "Please sign in again and retry.";
-    if (message === "FORBIDDEN" || message === "HTTP_403") return "You can only cancel your own orders.";
+    const normalized = message.trim().toLowerCase();
+    if (message === "HTTP_401" || normalized.includes("unauthorized"))
+      return "Please sign in again and retry.";
+    if (message === "HTTP_403" || normalized.includes("forbidden"))
+      return "You can only cancel your own orders.";
     if (message === "HTTP_404") return "Order not found.";
     if (message === "HTTP_409") return "This order can’t be cancelled anymore.";
     return "Unable to cancel order. Please try again.";

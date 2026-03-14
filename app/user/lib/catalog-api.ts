@@ -214,3 +214,10 @@ export async function fetchAdminProducts(): Promise<Product[]> {
   const response = await api("/api/admin/products");
   return unwrapList(response).map(normalizeProduct).filter((item): item is Product => item !== null);
 }
+
+export async function fetchAdminArchivedProducts(): Promise<Product[]> {
+  const response = await api("/api/admin/products/archived");
+  return unwrapList(response)
+    .map(normalizeProduct)
+    .filter((item): item is Product => item !== null);
+}

@@ -7,6 +7,7 @@ import { logoutUser } from "../../lib/auth";
 
 const adminLinks = [
   { label: "Dashboard", href: "/admin" },
+  { label: "Order Tracker", href: "/admin/order_tracker" },
   { label: "Product Management", href: "/admin/product_management" },
 ];
 

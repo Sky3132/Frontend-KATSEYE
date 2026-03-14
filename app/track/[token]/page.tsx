@@ -1,4 +1,4 @@
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 
 type ParcelTrackingResponse = {
   token: string;
@@ -29,16 +29,21 @@ function getApiBase() {
 export default async function TrackParcelPage({
   params,
 }: {
-  params: { token: string };
+  // Next.js versions differ on whether `params` is sync or async.
+  // `await` works for both (awaiting a non-Promise returns the value).
+  params: Promise<{ token: string }> | { token: string };
 }) {
-  const { token } = params;
+  const { token } = await params;
+  if (!token) notFound();
 
   const apiBase = getApiBase();
   const res = await fetch(`${apiBase}/api/public/parcels/track/${encodeURIComponent(token)}`, {
     cache: "no-store",
   });
 
-  if (res.status === 404) notFound();
+  if (res.status === 404) {
+    redirect(`/track-order/${encodeURIComponent(token)}`);
+  }
   if (!res.ok) {
     throw new Error(`Tracking fetch failed: HTTP_${res.status}`);
   }
