@@ -118,7 +118,7 @@ export default function LandingPage() {
           <img
             src={isDarkTheme ? "/black logo.jpg" : "/logo.png"}
             alt="Katseye logo"
-            className="h-11 w-11 rounded-full object-cover"
+            className={`h-11 w-11 rounded-full ${isDarkTheme ? "object-cover" : "object-contain scale-110"}`}
           />
           <span className="text-3xl font-semibold text-white">
             Katseye Klothes

@@ -107,15 +107,24 @@ export default function AuthShell({
         <section className="flex w-full flex-col overflow-y-auto rounded-[28px] border border-black/10 bg-[#f8f8f5] px-6 py-6 transition-colors dark:border-[#2f2a16] dark:bg-[#090909] sm:px-10 lg:w-[48%] lg:px-12 lg:py-8">
           <div className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-3">
-            <span className="flex h-10 w-10 items-center justify-center rounded-full bg-black text-sm font-semibold tracking-[0.28em] text-white dark:bg-[#f1d04b] dark:text-[#090909]">
-              KK
-            </span>
-            <div>
-              <p className="text-sm font-semibold uppercase tracking-[0.3em] text-black/55 dark:text-[#b59b39]">
-                Katseye
-              </p>
-              <h1 className="text-xl font-semibold tracking-[-0.02em]">Katseye Klothes</h1>
-            </div>
+              <img
+                src="/logo_Black-Photoroom.png"
+                alt="Katseye logo"
+                className="h-11 w-11 scale-110 rounded-full object-contain dark:hidden"
+              />
+              <img
+                src="/black logo.jpg"
+                alt="Katseye logo"
+                className="hidden h-11 w-11 rounded-full object-cover dark:block"
+              />
+              <div>
+                <p className="text-sm font-semibold uppercase tracking-[0.3em] text-black/55 dark:text-[#b59b39]">
+                  Katseye
+                </p>
+                <h1 className="text-xl font-semibold tracking-[-0.02em]">
+                  Katseye Klothes
+                </h1>
+              </div>
             </div>
             <ThemeToggle />
           </div>

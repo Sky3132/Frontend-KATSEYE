@@ -1,12 +1,12 @@
 "use client";
 
 // Prefer setting this in `.env.local`:
-// `NEXT_PUBLIC_API_BASE_URL=http://localhost:3001`
+// `NEXT_PUBLIC_API_BASE_URL=http://localhost:3001/api`
 // All requests include cookies for httpOnly `auth_token`.
 export const API_BASE =
   process.env.NEXT_PUBLIC_API_BASE_URL ??
   process.env.NEXT_PUBLIC_API_URL ??
-  "http://localhost:3001";
+  "http://localhost:3001/api";
 
 type JsonRecord = Record<string, unknown>;
 
@@ -14,18 +14,38 @@ const isJsonRecord = (value: unknown): value is JsonRecord =>
   typeof value === "object" && value !== null;
 
 export async function api<T = unknown>(path: string, options: RequestInit = {}): Promise<T> {
-  // We call endpoints with `/api/...` paths already; strip a trailing `/api` if the env var includes it.
-  const baseUrl = API_BASE.replace(/\/+$/, "").replace(/\/api$/i, "");
+  const baseUrl = API_BASE.replace(/\/+$/, "");
   const normalizedPath = path.startsWith("/") ? path : `/${path}`;
-  const response = await fetch(`${baseUrl}${normalizedPath}`, {
-    ...options,
-    credentials: options.credentials ?? "include",
-    cache: options.cache ?? "no-store",
-    headers: {
-      "Content-Type": "application/json",
-      ...(options.headers ?? {}),
-    },
-  });
+  const baseEndsWithApi = baseUrl.toLowerCase().endsWith("/api");
+  const pathStartsWithApi = normalizedPath.toLowerCase().startsWith("/api/");
+  const finalUrl =
+    baseEndsWithApi && pathStartsWithApi
+      ? `${baseUrl}${normalizedPath.slice(4)}`
+      : `${baseUrl}${normalizedPath}`;
+
+  const fetchOnce = (url: string) =>
+    fetch(url, {
+      ...options,
+      credentials: options.credentials ?? "include",
+      cache: options.cache ?? "no-store",
+      headers: {
+        "Content-Type": "application/json",
+        ...(options.headers ?? {}),
+      },
+    });
+
+  let response = await fetchOnce(finalUrl);
+
+  // Fallback for misconfigured bases that omit `/api`.
+  // If callers use `/locations/...` paths, retry once against `/api/locations/...`.
+  if (
+    response.status === 404 &&
+    !baseEndsWithApi &&
+    !pathStartsWithApi &&
+    normalizedPath.toLowerCase().startsWith("/locations/")
+  ) {
+    response = await fetchOnce(`${baseUrl}/api${normalizedPath}`);
+  }
 
   if (response.status === 204) return undefined as T;
 

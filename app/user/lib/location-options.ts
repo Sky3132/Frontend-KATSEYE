@@ -62,7 +62,7 @@ function normalizeCountry(raw: unknown): LocationCountry | null {
  */
 export async function fetchCountries(): Promise<LocationCountry[]> {
   try {
-    const response = await api("/api/locations/countries");
+    const response = await api("/locations/countries");
     const record = unwrapObject(response);
     const items = unwrapList(record?.items ?? response);
     return items
@@ -82,7 +82,7 @@ export async function fetchLocationSchema(
   if (!countryCode) return null;
   try {
     const response = await api(
-      `/api/locations/schema?country_code=${encodeURIComponent(countryCode)}`,
+      `/locations/schema?country_code=${encodeURIComponent(countryCode)}`,
     );
     const record = unwrapObject(response);
     if (!record) return null;
@@ -117,7 +117,7 @@ export async function fetchLocationChildren(
 ): Promise<LocationItem[]> {
   if (!parentId || !type) return [];
   try {
-    const url = `/api/locations/children?parent_id=${encodeURIComponent(parentId)}&type=${encodeURIComponent(type)}`;
+    const url = `/locations/children?parent_id=${encodeURIComponent(parentId)}&type=${encodeURIComponent(type)}&limit=5000`;
     const response = await api(url);
     const record = unwrapObject(response);
     const items = unwrapList(record?.items ?? response);
@@ -139,7 +139,7 @@ export async function searchLocations(
 ): Promise<LocationItem[]> {
   if (!countryCode || !type || !q.trim()) return [];
   try {
-    const url = `/api/locations/search?country_code=${encodeURIComponent(countryCode)}&type=${encodeURIComponent(type)}&q=${encodeURIComponent(q.trim())}`;
+    const url = `/locations/search?country_code=${encodeURIComponent(countryCode)}&type=${encodeURIComponent(type)}&q=${encodeURIComponent(q.trim())}`;
     const response = await api(url);
     const record = unwrapObject(response);
     const items = unwrapList(record?.items ?? response);

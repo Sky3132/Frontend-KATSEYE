@@ -38,6 +38,7 @@ import {
 } from "../lib/location-options";
 import { useStoreSettings } from "../lib/store-settings";
 import { requestProductsRefresh } from "../lib/use-live-products";
+import { fetchUsdFxRate, type FxQuote } from "../lib/fx";
 
 // ─── helpers re-exported from api.ts that the old file used ──────────────────
 import { asString, unwrapList } from "../../lib/api";
@@ -118,7 +119,7 @@ const PhoneNumberPicker = (props: {
     const load = async () => {
       setLoading(true);
       try {
-        const response = await api("/api/locations/calling-codes");
+        const response = await api("/locations/calling-codes");
         const record = unwrapObject(response);
         const list = unwrapList(record?.items ?? response)
           .map((raw) => unwrapObject(raw))
@@ -439,35 +440,7 @@ export default function CheckoutPage() {
     readSelectedCartItemIds,
     getSelectedCartServerSnapshot,
   );
-  const { t, currency, formatCurrency } = useStoreSettings();
-
-  const usdToPhpRate = useMemo(() => {
-    const json =
-      process.env.NEXT_PUBLIC_FX_RATES_USD_JSON ??
-      process.env.FX_RATES_USD_JSON ??
-      "";
-    if (json) {
-      try {
-        const parsed = JSON.parse(json) as unknown;
-        if (
-          parsed &&
-          typeof parsed === "object" &&
-          "PHP" in parsed &&
-          typeof (parsed as Record<string, unknown>).PHP === "number" &&
-          Number.isFinite((parsed as Record<string, unknown>).PHP)
-        ) {
-          return (parsed as Record<string, number>).PHP;
-        }
-      } catch {
-        // ignore invalid JSON and fall back to scalar rate
-      }
-    }
-
-    const scalar =
-      process.env.NEXT_PUBLIC_USD_TO_PHP_RATE ?? process.env.USD_TO_PHP_RATE;
-    const rate = scalar ? Number(scalar) : Number.NaN;
-    return Number.isFinite(rate) && rate > 0 ? rate : null;
-  }, []);
+  const { t, currency } = useStoreSettings();
 
   const formatUsd = (value: number) =>
     new Intl.NumberFormat("en-US", {
@@ -476,20 +449,82 @@ export default function CheckoutPage() {
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
     }).format(value);
-  const formatPhp = (value: number) =>
-    new Intl.NumberFormat("en-PH", {
-      style: "currency",
-      currency: "PHP",
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    }).format(value);
 
-  const formatDisplay = (usdValue: number) => {
-    if (currency === "USD") return formatUsd(usdValue);
-    if (currency === "PHP" && usdToPhpRate != null) {
-      return formatPhp(Math.round(usdValue * usdToPhpRate * 100) / 100);
+  const displayCurrency: FxQuote =
+    currency === "USD" || currency === "PHP" || currency === "JPY" || currency === "KRW"
+      ? (currency as FxQuote)
+      : "USD";
+
+  const [fxRate, setFxRate] = useState<number | null>(
+    displayCurrency === "USD" ? 1 : null,
+  );
+  const [fxError, setFxError] = useState("");
+  const usdToPhpRate: number | null = null;
+  const formatPhp = formatUsd;
+
+  useEffect(() => {
+    if (displayCurrency === "USD") {
+      setFxRate(1);
+      setFxError("");
+      return;
     }
-    return formatCurrency(usdValue);
+
+    const controller = new AbortController();
+    setFxError("");
+    setFxRate(null);
+    fetchUsdFxRate(displayCurrency, controller.signal)
+      .then((rate) => setFxRate(rate))
+      .catch((err) => {
+        if (controller.signal.aborted) return;
+        setFxRate(null);
+        setFxError(err instanceof Error ? err.message : "Unable to load FX rate.");
+      });
+
+    return () => controller.abort();
+  }, [displayCurrency]);
+
+  const formatDisplayCurrency = (value: number) =>
+    new Intl.NumberFormat(
+      displayCurrency === "PHP"
+        ? "en-PH"
+        : displayCurrency === "JPY"
+          ? "ja-JP"
+          : displayCurrency === "KRW"
+            ? "ko-KR"
+            : "en-US",
+      {
+        style: "currency",
+        currency: displayCurrency,
+        minimumFractionDigits:
+          displayCurrency === "JPY" || displayCurrency === "KRW" ? 0 : 2,
+        maximumFractionDigits:
+          displayCurrency === "JPY" || displayCurrency === "KRW" ? 0 : 2,
+      },
+    ).format(value);
+
+  const approxValue = (usdValue: number) => {
+    if (displayCurrency === "USD") return null;
+    if (fxRate == null) return null;
+    const raw = usdValue * fxRate;
+    const rounded =
+      displayCurrency === "JPY" || displayCurrency === "KRW"
+        ? Math.round(raw)
+        : Math.round(raw * 100) / 100;
+    return rounded;
+  };
+
+  const renderAmount = (usdValue: number) => {
+    const approx = approxValue(usdValue);
+    return (
+      <span className="text-right">
+        <span className="block">{formatUsd(usdValue)}</span>
+        {displayCurrency !== "USD" && approx != null ? (
+          <span className="mt-0.5 block text-xs font-medium text-neutral-500 dark:text-[#cfbd78]">
+            (≈ {formatDisplayCurrency(approx)})
+          </span>
+        ) : null}
+      </span>
+    );
   };
 
   const steps = [
@@ -814,18 +849,12 @@ export default function CheckoutPage() {
         tax_amount?: number;
         currency?: string;
         display_currency?: string;
-        exchange_rate?: number;
-        estimated_php?: number;
       };
       type WithAddressInline = Omit<WithAddressId, "address_id"> & {
         address: CreateAddressInput;
       };
 
       let payload: WithAddressId | WithAddressInline;
-      const estimatedPhpForEmail =
-        usdToPhpRate != null
-          ? (subtotal + shippingFee + taxAmount) * usdToPhpRate
-          : null;
 
       if (useSavedAddress && selectedAddress) {
         payload = {
@@ -836,12 +865,7 @@ export default function CheckoutPage() {
           shipping_fee: Number(shippingFee),
           tax_amount: Number(taxAmount),
           currency: "USD",
-          display_currency: currency,
-          exchange_rate: usdToPhpRate ?? undefined,
-          estimated_php:
-            estimatedPhpForEmail != null
-              ? Math.round(estimatedPhpForEmail * 100) / 100
-              : undefined,
+          display_currency: displayCurrency,
         };
       } else {
         let createdAddress: Address | null = null;
@@ -868,12 +892,7 @@ export default function CheckoutPage() {
               shipping_fee: Number(shippingFee),
               tax_amount: Number(taxAmount),
               currency: "USD",
-              display_currency: currency,
-              exchange_rate: usdToPhpRate ?? undefined,
-              estimated_php:
-                estimatedPhpForEmail != null
-                  ? Math.round(estimatedPhpForEmail * 100) / 100
-                  : undefined,
+              display_currency: displayCurrency,
             }
           : {
               payment_method,
@@ -883,12 +902,7 @@ export default function CheckoutPage() {
               shipping_fee: Number(shippingFee),
               tax_amount: Number(taxAmount),
               currency: "USD",
-              display_currency: currency,
-              exchange_rate: usdToPhpRate ?? undefined,
-              estimated_php:
-                estimatedPhpForEmail != null
-                  ? Math.round(estimatedPhpForEmail * 100) / 100
-                  : undefined,
+              display_currency: displayCurrency,
             };
       }
 
@@ -1145,14 +1159,13 @@ export default function CheckoutPage() {
                 <p className="text-sm text-neutral-500 dark:text-[#cfbd78]">
                   Total: {formatUsd(placedOrder?.usdTotal ?? total)}
                 </p>
-                {placedOrder?.phpEstimate != null ? (
+                {displayCurrency !== "USD" &&
+                approxValue(placedOrder?.usdTotal ?? total) != null ? (
                   <p className="text-sm text-neutral-500 dark:text-[#cfbd78]">
-                    Estimated: {formatPhp(placedOrder.phpEstimate)}
-                  </p>
-                ) : null}
-                {placedOrder?.exchangeRate != null ? (
-                  <p className="text-sm text-neutral-500 dark:text-[#cfbd78]">
-                    Rate: 1 USD = {placedOrder.exchangeRate} PHP
+                    Approx:{" "}
+                    {formatDisplayCurrency(
+                      approxValue(placedOrder?.usdTotal ?? total)!,
+                    )}
                   </p>
                 ) : null}
                 <button
@@ -1566,13 +1579,16 @@ export default function CheckoutPage() {
                         {item.name} {item.size ? `(${item.size}) ` : ""}x{" "}
                         {item.qty}
                       </span>
-                      <span className="text-right">
-                        {formatDisplay(item.price * item.qty)}
-                      </span>
+                      {renderAmount(item.price * item.qty)}
                     </div>
                   ))
                 : null}
             </div>
+            {displayCurrency !== "USD" && fxError ? (
+              <p className="mt-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-900 dark:border-amber-500/30 dark:bg-amber-950/20 dark:text-amber-100">
+                FX rate unavailable: {fxError}
+              </p>
+            ) : null}
             <div className="mt-5 space-y-3 border-t border-neutral-200 pt-4 text-sm dark:border-[#2c2817]">
               {step === 3 || orderPlaced ? (
                 <div className="flex items-center justify-between">
@@ -1588,45 +1604,34 @@ export default function CheckoutPage() {
                 <span className="text-neutral-500 dark:text-[#cfbd78]">
                   {t("subTotal")}
                 </span>
-                <span>
-                  {formatDisplay(
-                    orderPlaced
-                      ? (placedOrder?.subtotalUsd ?? subtotal)
-                      : subtotal,
-                  )}
-                </span>
+                {renderAmount(
+                  orderPlaced ? (placedOrder?.subtotalUsd ?? subtotal) : subtotal,
+                )}
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-neutral-500 dark:text-[#cfbd78]">
                   {t("shipping")}
                 </span>
-                <span>
-                  {formatDisplay(
-                    orderPlaced
-                      ? (placedOrder?.shippingFeeUsd ?? shippingFee)
-                      : shippingFee,
-                  )}
-                </span>
+                {renderAmount(
+                  orderPlaced
+                    ? (placedOrder?.shippingFeeUsd ?? shippingFee)
+                    : shippingFee,
+                )}
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-neutral-500 dark:text-[#cfbd78]">
                   {t("tax")}
                 </span>
-                <span>
-                  {formatDisplay(
-                    orderPlaced
-                      ? (placedOrder?.taxAmountUsd ?? taxAmount)
-                      : taxAmount,
-                  )}
-                </span>
+                {renderAmount(
+                  orderPlaced ? (placedOrder?.taxAmountUsd ?? taxAmount) : taxAmount,
+                )}
               </div>
               <div className="flex items-center justify-between border-t border-neutral-200 pt-3 text-base font-semibold dark:border-[#2c2817]">
                 <span>{t("totalPayable")}</span>
-                <span className="text-right">
+                {renderAmount(orderPlaced ? (placedOrder?.usdTotal ?? total) : total)}
+                <span className="hidden text-right">
                   <span className="block">
-                    {formatDisplay(
-                      orderPlaced ? (placedOrder?.usdTotal ?? total) : total,
-                    )}
+                    {formatUsd(orderPlaced ? (placedOrder?.usdTotal ?? total) : total)}
                   </span>
                   {currency !== "USD" ? (
                     <span className="mt-0.5 block text-xs font-medium text-neutral-500 dark:text-[#cfbd78]">
@@ -1652,44 +1657,6 @@ export default function CheckoutPage() {
                   ) : null}
                 </span>
               </div>
-              {orderPlaced &&
-              (placedOrder?.phpEstimate != null ||
-                placedOrder?.exchangeRate != null) ? (
-                <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-900 dark:border-amber-500/30 dark:bg-amber-950/20 dark:text-amber-100">
-                  <p className="font-semibold">Charged in USD</p>
-                  <p className="mt-2 text-sm font-semibold">
-                    {formatUsd(placedOrder?.usdTotal ?? total)}
-                  </p>
-                  {placedOrder?.phpEstimate != null ? (
-                    <p className="mt-1 text-sm font-semibold">
-                      Estimated: {formatPhp(placedOrder.phpEstimate)}
-                    </p>
-                  ) : currency !== "USD" ? (
-                    <p className="mt-1 text-sm font-semibold">
-                      Estimated: {formatCurrency(placedOrder?.usdTotal ?? total)}
-                    </p>
-                  ) : usdToPhpRate != null ? (
-                    <p className="mt-1 text-sm font-semibold">
-                      Estimated:{" "}
-                      {formatPhp(
-                        Math.round(
-                          ((placedOrder?.usdTotal ?? total) * usdToPhpRate) *
-                            100,
-                        ) / 100,
-                      )}
-                    </p>
-                  ) : null}
-                  {placedOrder?.exchangeRate != null ? (
-                    <p className="mt-1 opacity-90">
-                      Rate: 1 USD = {placedOrder.exchangeRate} PHP
-                    </p>
-                  ) : usdToPhpRate != null ? (
-                    <p className="mt-1 opacity-90">
-                      Rate: 1 USD = {usdToPhpRate} PHP
-                    </p>
-                  ) : null}
-                </div>
-              ) : null}
             </div>
             {!orderPlaced ? (
               <button

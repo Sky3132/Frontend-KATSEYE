@@ -11,7 +11,7 @@ export default function AppFooter() {
             <img
               src="/logo_Black-Photoroom.png"
               alt="Katseye logo"
-              className="h-12 w-12 rounded-full object-cover dark:hidden"
+              className="h-12 w-12 scale-110 rounded-full object-contain dark:hidden"
             />
             <img
               src="/black logo.jpg"

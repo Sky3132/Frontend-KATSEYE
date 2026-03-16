@@ -621,7 +621,7 @@ export default function StoreHeader({ cartCount, onCartClick }: StoreHeaderProps
             <img
               src={isDarkTheme ? "/black logo.jpg" : "/logo_Black-Photoroom.png"}
               alt="Katseye logo"
-              className="h-10 w-10 rounded-full object-cover sm:h-11 sm:w-11"
+              className={`h-10 w-10 rounded-full sm:h-11 sm:w-11 ${isDarkTheme ? "object-cover" : "object-contain scale-110"}`}
             />
             <span className="truncate">Katseye Klothes</span>
           </Link>

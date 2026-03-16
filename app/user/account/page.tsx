@@ -118,7 +118,7 @@ const PhoneNumberPicker = (props: {
     const load = async () => {
       setLoading(true);
       try {
-        const response = await api("/api/locations/calling-codes");
+        const response = await api("/locations/calling-codes");
         const record = unwrapObject(response);
         const list = unwrapList(record?.items ?? response)
           .map((raw) => unwrapObject(raw))
