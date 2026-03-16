@@ -8,15 +8,28 @@ import {
   readCart,
   subscribeCart,
 } from "../lib/cart";
+import { fetchMyAddresses, type Address } from "../lib/address-api";
 import { fetchOrders } from "../lib/orders-api";
 import { useStoreSettings } from "../lib/store-settings";
 import type { AccountOrder, AccountOrderStatus } from "../lib/account-content";
+import { api, asString, unwrapObject } from "../../lib/api";
+
+type MeProfile = {
+  id?: string;
+  role?: string;
+  name?: string;
+  email?: string;
+  full_name?: string;
+  phone_e164?: string;
+};
 
 export default function OrderHistoryPage() {
   const cart = useSyncExternalStore(subscribeCart, readCart, getCartServerSnapshot);
   const cartCount = useMemo(() => getCartCount(cart), [cart]);
   const { t } = useStoreSettings();
   const [orders, setOrders] = useState<AccountOrder[]>([]);
+  const [me, setMe] = useState<MeProfile | null>(null);
+  const [addresses, setAddresses] = useState<Address[]>([]);
   const [activeTab, setActiveTab] = useState<AccountOrderStatus>("active");
   const [selectedOrderId, setSelectedOrderId] = useState("");
   const statusTabs = [
@@ -35,6 +48,40 @@ export default function OrderHistoryPage() {
       .catch(() => setOrders([]));
   }, []);
 
+  useEffect(() => {
+    let cancelled = false;
+    const load = async () => {
+      try {
+        const items = await fetchMyAddresses();
+        if (!cancelled) setAddresses(items);
+      } catch {
+        if (!cancelled) setAddresses([]);
+      }
+    };
+    void load();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    const load = async () => {
+      try {
+        const response = (await api("/api/users/me")) as unknown;
+        const record = unwrapObject(response) ?? {};
+        const meRecord = (unwrapObject(record.user) ?? record) as MeProfile;
+        if (!cancelled) setMe(meRecord);
+      } catch {
+        if (!cancelled) setMe(null);
+      }
+    };
+    void load();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const filteredOrders = useMemo(
     () => orders.filter((order) => order.status === activeTab),
     [activeTab, orders],
@@ -42,6 +89,67 @@ export default function OrderHistoryPage() {
 
   const selectedOrder =
     filteredOrders.find((order) => order.id === selectedOrderId) ?? filteredOrders[0] ?? null;
+
+  const selectedOrderAddress = useMemo(() => {
+    if (!selectedOrder?.addressId) return null;
+    return addresses.find((addr) => addr.id === selectedOrder.addressId) ?? null;
+  }, [addresses, selectedOrder]);
+
+  const selectedOrderAddressLabel = useMemo(() => {
+    if (!selectedOrderAddress) return "";
+    return [
+      selectedOrderAddress.street,
+      selectedOrderAddress.barangay,
+      selectedOrderAddress.city,
+      selectedOrderAddress.province,
+      selectedOrderAddress.region,
+      selectedOrderAddress.country,
+      selectedOrderAddress.zip_code,
+    ]
+      .map((part) => String(part ?? "").trim())
+      .filter(Boolean)
+      .join(", ");
+  }, [selectedOrderAddress]);
+
+  const selectedOrderCustomerName = useMemo(() => {
+    if (!selectedOrder) return "Customer";
+    return (
+      asString(selectedOrderAddress?.full_name) ||
+      asString(selectedOrder.addressRecord?.full_name) ||
+      asString(me?.full_name) ||
+      asString(me?.name) ||
+      "Customer"
+    );
+  }, [me?.full_name, me?.name, selectedOrder, selectedOrderAddress?.full_name]);
+
+  const selectedOrderCustomerContact = useMemo(() => {
+    if (!selectedOrder) return "";
+    return (
+      asString(selectedOrderAddress?.phone) ||
+      asString(selectedOrder.addressRecord?.phone_e164) ||
+      asString(me?.phone_e164) ||
+      asString(selectedOrderAddress?.email) ||
+      asString(selectedOrder.addressRecord?.email) ||
+      asString(me?.email) ||
+      ""
+    );
+  }, [
+    me?.email,
+    me?.phone_e164,
+    selectedOrder,
+    selectedOrderAddress?.email,
+    selectedOrderAddress?.phone,
+  ]);
+
+  const selectedOrderCustomerEmail = useMemo(() => {
+    if (!selectedOrder) return "";
+    return (
+      asString(selectedOrderAddress?.email) ||
+      asString(selectedOrder.addressRecord?.email) ||
+      asString(me?.email) ||
+      ""
+    );
+  }, [me?.email, selectedOrder, selectedOrderAddress?.email]);
 
   return (
     <main className="min-h-screen bg-[#f6f7f4] text-[#111] transition-colors dark:bg-[#060606] dark:bg-[radial-gradient(circle_at_top,rgba(118,100,26,0.16),transparent_16%),linear-gradient(180deg,#050505_0%,#090909_38%,#0b0b0a_100%)] dark:text-[#f0d34f]">
@@ -107,19 +215,31 @@ export default function OrderHistoryPage() {
                       <p className="text-xs font-semibold uppercase tracking-[0.16em] text-neutral-400 dark:text-[#8e7727]">
                         {t("customerName")}
                       </p>
-                      <p className="mt-2 text-base font-medium">{selectedOrder.customerName}</p>
+                      <p className="mt-2 text-base font-medium">{selectedOrderCustomerName}</p>
                     </div>
                     <div>
                       <p className="text-xs font-semibold uppercase tracking-[0.16em] text-neutral-400 dark:text-[#8e7727]">
                         {t("customerContact")}
                       </p>
-                      <p className="mt-2 text-base font-medium">{selectedOrder.contact}</p>
+                      {selectedOrderCustomerContact ? (
+                        <p className="mt-2 break-all text-base font-medium">
+                          {selectedOrderCustomerContact}
+                        </p>
+                      ) : null}
+                      {selectedOrderCustomerEmail &&
+                      selectedOrderCustomerEmail !== selectedOrderCustomerContact ? (
+                        <p className="mt-1 break-all text-sm font-medium text-neutral-500 dark:text-[#cfbd78]">
+                          {selectedOrderCustomerEmail}
+                        </p>
+                      ) : null}
                     </div>
                     <div>
                       <p className="text-xs font-semibold uppercase tracking-[0.16em] text-neutral-400 dark:text-[#8e7727]">
                         {t("deliveryAddress")}
                       </p>
-                      <p className="mt-2 leading-7 text-neutral-600 dark:text-[#cfbd78]">{selectedOrder.address}</p>
+                      <p className="mt-2 leading-7 text-neutral-600 dark:text-[#cfbd78]">
+                        {selectedOrderAddressLabel || selectedOrder.address}
+                      </p>
                     </div>
                     <div>
                       <p className="text-xs font-semibold uppercase tracking-[0.16em] text-neutral-400 dark:text-[#8e7727]">

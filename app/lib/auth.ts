@@ -36,13 +36,27 @@ export const writeStoredUser = (user: Partial<StoredUser>) => {
   if (typeof window === "undefined") return;
 
   const current = readStoredUser();
+  const nextEmail = asString(user.email ?? current?.email);
+  const incomingName = asString(user.name ?? current?.name, "User");
+  const currentName = asString(current?.name, "User");
+  const emailLocalPart = nextEmail.split("@")[0]?.toLowerCase() ?? "";
+  const incomingLooksLikeEmailHandle =
+    Boolean(emailLocalPart) &&
+    incomingName.toLowerCase() === emailLocalPart &&
+    !incomingName.includes(" ");
+  const shouldPreserveCurrentName =
+    incomingLooksLikeEmailHandle &&
+    currentName !== "User" &&
+    currentName.trim().length > 0 &&
+    currentName.toLowerCase() !== emailLocalPart;
+
   const nextUser: StoredUser = {
     ...defaultUser,
     ...current,
     ...user,
     id: asString(user.id ?? current?.id),
-    name: asString(user.name ?? current?.name, "User"),
-    email: asString(user.email ?? current?.email),
+    name: shouldPreserveCurrentName ? currentName : incomingName,
+    email: nextEmail,
     role: asString(user.role ?? current?.role, "customer").toLowerCase(),
     avatar: asString(user.avatar ?? current?.avatar),
   };

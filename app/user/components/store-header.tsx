@@ -486,28 +486,90 @@ export default function StoreHeader({ cartCount, onCartClick }: StoreHeaderProps
   const getNotificationDisplay = (message: string) => {
     const normalized = message.toLowerCase();
 
-    if (normalized.includes("you placed an order") || normalized.includes("order placed")) {
+    const isOrderCancelled =
+      normalized.includes("order") &&
+      (normalized.includes("cancelled") ||
+        normalized.includes("canceled") ||
+        normalized.includes("cancel"));
+
+    const isOrderConfirmed =
+      normalized.includes("order confirmed") ||
+      normalized.includes("order received") ||
+      normalized.includes("order placed") ||
+      normalized.includes("you placed an order");
+
+    const isOrderUpdated =
+      normalized.includes("order updated") ||
+      normalized.includes("updated") ||
+      normalized.includes("shipping") ||
+      normalized.includes("shipped") ||
+      normalized.includes("delivered") ||
+      normalized.includes("processing") ||
+      normalized.includes("tracking");
+
+    const isPaymentSuccessful =
+      normalized.includes("payment successful") ||
+      (normalized.includes("payment") && normalized.includes("successful")) ||
+      normalized.includes("paid");
+
+    const isReadyForCheckout =
+      normalized.includes("ready for checkout") ||
+      normalized.includes("ready to checkout") ||
+      normalized.includes("left in your cart") ||
+      (normalized.includes("checkout") && normalized.includes("ready"));
+
+    const isItemReserved =
+      normalized.includes("item reserved") ||
+      normalized.includes("reserved") ||
+      normalized.includes("low stock") ||
+      normalized.includes("almost sold out");
+
+    const isBackInStock =
+      normalized.includes("back in stock") ||
+      (normalized.includes("back") && normalized.includes("stock")) ||
+      normalized.includes("restocked");
+
+    if (isOrderCancelled) {
       return {
-        label: "Your order has been placed",
+        label: "Order Cancelled",
         description: message,
       };
     }
 
-    if (normalized.includes("payment")) {
+    if (isPaymentSuccessful) {
       return {
-        label: "Payment Update",
+        label: "Payment Successful",
         description: message,
       };
     }
 
-    if (normalized.includes("account")) {
+    if (isOrderConfirmed) {
       return {
-        label: "Account Update",
+        label: "Order Confirmed",
         description: message,
       };
     }
 
-    return { label: "Notification", description: message };
+    if (isReadyForCheckout) {
+      return {
+        label: "Ready for Checkout",
+        description: message,
+      };
+    }
+
+    if (isItemReserved) {
+      return { label: "Item Reserved", description: message };
+    }
+
+    if (isBackInStock) {
+      return { label: "Back in Stock", description: message };
+    }
+
+    if (isOrderUpdated || normalized.includes("order") || normalized.includes("address")) {
+      return { label: "Order Updated", description: message };
+    }
+
+    return { label: "Order Updated", description: message };
   };
 
   const formatRelativeTime = (isoTimestamp: string, nowMs: number) => {

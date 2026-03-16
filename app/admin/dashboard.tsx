@@ -568,6 +568,204 @@ export default function AdminDashboard() {
     setLastSaved(now.toLocaleTimeString());
   };
 
+  const exportReport = useCallback(() => {
+    if (typeof window === "undefined") return;
+
+    const now = new Date();
+    const generatedAt = now.toLocaleString("en-US", {
+      year: "numeric",
+      month: "long",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+
+    const safePdfText = (value: unknown) =>
+      String(value ?? "")
+        .replaceAll("\\", "\\\\")
+        .replaceAll("(", "\\(")
+        .replaceAll(")", "\\)")
+        .replaceAll("\r", " ")
+        .replaceAll("\n", " ");
+
+    const last6 = (() => {
+      const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+      const currentMonth = now.getMonth();
+      const entries = Array.from({ length: 6 }, (_, index) => {
+        const offset = 5 - index;
+        const monthIndex = (currentMonth - offset + 12) % 12;
+        return { label: monthNames[monthIndex], value: effectiveMonthlySales[monthIndex] ?? 0 };
+      });
+      return entries;
+    })();
+
+    const padOffset = (value: number) => String(value).padStart(10, "0");
+    const toAsciiBytes = (value: string) => new TextEncoder().encode(value);
+
+    const maxMonthly = Math.max(1, ...last6.map((item) => item.value));
+
+    const totalSalesText = kpis.totalSalesValue !== null ? currency.format(kpis.totalSalesValue) : "—";
+    const currentStocksText = stockLoading ? "—" : String(totalStock);
+    const lowOutText = stockLoading ? "—" : String(lowStockCount);
+    const reportsGeneratedText = kpisLoading ? "—" : String(kpis.reportsGeneratedValue ?? "—");
+    const mostSoldNameText = mostSoldLoading ? "Loading…" : mostSoldHeadline?.name ?? "—";
+    const mostSoldUnitsText = mostSoldLoading ? "—" : String(mostSoldHeadline?.quantitySold ?? "—");
+    const mostSoldRevenueText = mostSoldLoading
+      ? "—"
+      : mostSoldHeadline
+        ? currency.format(mostSoldHeadline.revenue)
+        : "—";
+
+    const lines: { size: number; x: number; y: number; text: string }[] = [
+      { size: 18, x: 52, y: 800, text: "Katseye Insights Report" },
+      { size: 10, x: 52, y: 784, text: "1 page summary • Admin Dashboard" },
+      { size: 10, x: 390, y: 800, text: `Generated: ${generatedAt}` },
+      { size: 10, x: 390, y: 784, text: `Last save: ${lastSaved || "—"}` },
+
+      { size: 12, x: 52, y: 748, text: "Key Metrics" },
+      { size: 10, x: 56, y: 730, text: `Total Sales: ${totalSalesText}` },
+      { size: 10, x: 56, y: 715, text: `Orders: ${String(totalOrders)}` },
+      { size: 10, x: 56, y: 700, text: `Paid Orders: ${String(paidOrders)}` },
+      { size: 10, x: 56, y: 685, text: `Current Stocks: ${currentStocksText}` },
+      { size: 10, x: 56, y: 670, text: `Low/Out of Stock: ${lowOutText}` },
+      { size: 10, x: 56, y: 655, text: `Reports Generated (30d): ${reportsGeneratedText}` },
+
+      { size: 12, x: 320, y: 748, text: "Sales Trend (Last 6 months)" },
+      { size: 12, x: 52, y: 622, text: "Most Sold Item" },
+      { size: 10, x: 56, y: 604, text: `Product: ${mostSoldNameText}` },
+      { size: 10, x: 56, y: 589, text: `Units Sold: ${mostSoldUnitsText}` },
+      { size: 10, x: 56, y: 574, text: `Revenue: ${mostSoldRevenueText}` },
+
+      { size: 12, x: 320, y: 622, text: "Notes" },
+      { size: 9, x: 320, y: 604, text: "This report is generated from the current dashboard state." },
+    ];
+
+    const rects: { x: number; y: number; w: number; h: number; fillRgb: [number, number, number] }[] = [];
+
+    // Draw metric and notes boxes
+    rects.push({ x: 48, y: 642, w: 250, h: 122, fillRgb: [0.98, 0.98, 0.99] });
+    rects.push({ x: 312, y: 642, w: 236, h: 122, fillRgb: [0.98, 0.98, 0.99] });
+    rects.push({ x: 48, y: 558, w: 250, h: 78, fillRgb: [0.98, 0.98, 0.99] });
+    rects.push({ x: 312, y: 558, w: 236, h: 78, fillRgb: [0.98, 0.98, 0.99] });
+
+    // Bar chart area
+    const chartX = 322;
+    const chartY = 654;
+    const chartW = 216;
+    const chartH = 82;
+    rects.push({ x: chartX, y: chartY, w: chartW, h: chartH, fillRgb: [1, 1, 1] });
+
+    const barGap = 10;
+    const barW = 22;
+    last6.forEach((item, index) => {
+      const value = item.value;
+      const barH = Math.max(2, Math.round((value / maxMonthly) * 62));
+      const x = chartX + 10 + index * (barW + barGap);
+      const y = chartY + 12;
+      rects.push({ x, y, w: barW, h: barH, fillRgb: [0.15, 0.17, 0.45] });
+      lines.push({ size: 8, x: x + 2, y: chartY + 2, text: item.label });
+    });
+
+    const contentParts: string[] = [];
+    // Filled rectangles
+    for (const r of rects) {
+      const [rr, gg, bb] = r.fillRgb;
+      contentParts.push(`${rr} ${gg} ${bb} rg`);
+      contentParts.push(`${r.x} ${r.y} ${r.w} ${r.h} re f`);
+    }
+    // Borders
+    contentParts.push(`0.90 0.91 0.93 RG 1 w`);
+    contentParts.push(`48 642 250 122 re S`);
+    contentParts.push(`312 642 236 122 re S`);
+    contentParts.push(`48 558 250 78 re S`);
+    contentParts.push(`312 558 236 78 re S`);
+    contentParts.push(`0.85 0.86 0.90 RG 0.7 w`);
+    contentParts.push(`${chartX} ${chartY} ${chartW} ${chartH} re S`);
+
+    // Text
+    for (const line of lines) {
+      contentParts.push(`BT /F1 ${line.size} Tf ${line.x} ${line.y} Td (${safePdfText(line.text)}) Tj ET`);
+    }
+
+    const contentStream = contentParts.join("\n");
+    const contentBytes = toAsciiBytes(contentStream);
+
+    const objects: { id: number; body: Uint8Array }[] = [];
+    const addObj = (id: number, body: string | Uint8Array) => {
+      objects.push({ id, body: typeof body === "string" ? toAsciiBytes(body) : body });
+    };
+
+    // PDF objects
+    addObj(1, `<< /Type /Catalog /Pages 2 0 R >>`);
+    addObj(2, `<< /Type /Pages /Kids [3 0 R] /Count 1 >>`);
+    addObj(
+      3,
+      `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>`,
+    );
+    addObj(4, `<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>`);
+    const streamHeader = toAsciiBytes(`<< /Length ${contentBytes.length} >>\nstream\n`);
+    const streamFooter = toAsciiBytes(`\nendstream`);
+    const streamBody = new Uint8Array(streamHeader.length + contentBytes.length + streamFooter.length);
+    streamBody.set(streamHeader, 0);
+    streamBody.set(contentBytes, streamHeader.length);
+    streamBody.set(streamFooter, streamHeader.length + contentBytes.length);
+    addObj(5, streamBody);
+
+    // Build PDF file
+    const header = toAsciiBytes(`%PDF-1.4\n%âãÏÓ\n`);
+    const chunks: Uint8Array[] = [header];
+    const xref: number[] = [0]; // object 0
+
+    let offset = header.length;
+    const writeChunk = (chunk: Uint8Array) => {
+      chunks.push(chunk);
+      offset += chunk.length;
+    };
+
+    objects.sort((a, b) => a.id - b.id);
+    for (const obj of objects) {
+      xref[obj.id] = offset;
+      writeChunk(toAsciiBytes(`${obj.id} 0 obj\n`));
+      writeChunk(obj.body);
+      writeChunk(toAsciiBytes(`\nendobj\n`));
+    }
+
+    const xrefStart = offset;
+    const maxObjId = Math.max(...objects.map((o) => o.id));
+    const xrefLines = [`xref\n0 ${maxObjId + 1}\n`, `0000000000 65535 f \n`];
+    for (let i = 1; i <= maxObjId; i++) {
+      const off = xref[i] ?? 0;
+      xrefLines.push(`${padOffset(off)} 00000 n \n`);
+    }
+    writeChunk(toAsciiBytes(xrefLines.join("")));
+
+    const trailer = `trailer\n<< /Size ${maxObjId + 1} /Root 1 0 R >>\nstartxref\n${xrefStart}\n%%EOF\n`;
+    writeChunk(toAsciiBytes(trailer));
+
+    const totalLen = chunks.reduce((sum, c) => sum + c.length, 0);
+    const pdf = new Uint8Array(totalLen);
+    let cursor = 0;
+    for (const c of chunks) {
+      pdf.set(c, cursor);
+      cursor += c.length;
+    }
+
+    const yyyy = String(now.getFullYear());
+    const mm = String(now.getMonth() + 1).padStart(2, "0");
+    const dd = String(now.getDate()).padStart(2, "0");
+    const filename = `katseye-insights-report-${yyyy}-${mm}-${dd}.pdf`;
+
+    const blob = new Blob([pdf], { type: "application/pdf" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 30_000);
+  }, [currency, effectiveMonthlySales, kpis, kpisLoading, lastSaved, lowStockCount, mostSoldHeadline, mostSoldLoading, paidOrders, stockLoading, totalOrders, totalStock]);
+
   return (
       <div className="mx-auto max-w-[1400px]">
         <header className="mb-6 flex flex-wrap items-center justify-between gap-3">
@@ -576,13 +774,17 @@ export default function AdminDashboard() {
             <h1 className="text-4xl font-semibold tracking-tight">Katseye Insights</h1>
             <p className="mt-1 text-xs text-neutral-500 dark:text-[#c7ba81]">Last save: {lastSaved}</p>
           </div>
-          <div className="flex items-center gap-2">
-            <button className="rounded-xl border border-neutral-300 bg-white px-4 py-2 text-sm font-medium dark:border-[#2f2a16] dark:bg-[#090909]">
-              Export Report
-            </button>
-            <button
-              type="button"
-              className="rounded-xl bg-[#272b74] px-4 py-2 text-sm font-medium text-white dark:bg-[#f1d04b] dark:text-[#090909]"
+           <div className="flex items-center gap-2">
+             <button
+               type="button"
+               className="rounded-xl border border-neutral-300 bg-white px-4 py-2 text-sm font-medium dark:border-[#2f2a16] dark:bg-[#090909]"
+               onClick={exportReport}
+             >
+               Export Report
+             </button>
+             <button
+               type="button"
+               className="rounded-xl bg-[#272b74] px-4 py-2 text-sm font-medium text-white dark:bg-[#f1d04b] dark:text-[#090909]"
               onClick={saveChanges}
             >
               Save Changes

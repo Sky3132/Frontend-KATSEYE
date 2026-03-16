@@ -14,8 +14,11 @@ export async function middleware(req: NextRequest) {
   const apiBase = (process.env.NEXT_PUBLIC_API_BASE_URL ?? process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001")
     .replace(/\/+$/, "")
     .replace(/\/api$/i, "");
+  const serverApiBase = (process.env.API_BASE ?? apiBase)
+    .replace(/\/+$/, "")
+    .replace(/\/api$/i, "");
 
-  const meRes = await fetch(`${apiBase}/api/users/me`, {
+  const meRes = await fetch(`${serverApiBase}/api/users/me`, {
     headers: { cookie: req.headers.get("cookie") ?? "" },
     cache: "no-store",
   });

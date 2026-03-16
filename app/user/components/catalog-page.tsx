@@ -215,7 +215,7 @@ export default function CatalogPage({
               {filteredProducts.map((product) => (
                 <article
                   key={product.id}
-                  className="flex h-full flex-col overflow-hidden rounded-[24px] border border-neutral-200 bg-white shadow-sm transition hover:-translate-y-1 hover:shadow-lg dark:border-[#2c2817] dark:bg-[#0a0a09] dark:shadow-[0_0_0_1px_rgba(214,183,54,0.05)]"
+                  className="group flex h-full flex-col overflow-hidden rounded-[24px] border border-neutral-200 bg-white shadow-sm transition hover:-translate-y-1 hover:shadow-lg dark:border-[#2c2817] dark:bg-[#0a0a09] dark:shadow-[0_0_0_1px_rgba(214,183,54,0.05)]"
                 >
                   <button
                     type="button"
@@ -223,11 +223,18 @@ export default function CatalogPage({
                     className="block overflow-hidden text-left"
                   >
                     <div className="flex aspect-[4/5] items-center justify-center border-b border-neutral-200 bg-[#f3f3f1] p-0 dark:border-[#232114] dark:bg-[#2b2b2b]">
-                      <img
-                        src={product.image}
-                        alt={product.name}
-                        className="h-full w-full object-cover object-center"
-                      />
+                      <div className="relative h-full w-full">
+                        <img
+                          src={product.image}
+                          alt={product.name}
+                          className="absolute inset-0 h-full w-full object-cover object-center opacity-100 transition-opacity duration-200 group-hover:opacity-0"
+                        />
+                        <img
+                          src={product.gallery?.[1] ?? product.gallery?.[0] ?? product.image}
+                          alt={product.name}
+                          className="absolute inset-0 h-full w-full object-cover object-center opacity-0 transition-opacity duration-200 group-hover:opacity-100"
+                        />
+                      </div>
                     </div>
                   </button>
 

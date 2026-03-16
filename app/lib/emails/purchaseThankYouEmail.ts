@@ -25,7 +25,6 @@ const escapeHtml = (value: string) =>
 export function buildPurchaseThankYouEmail(input: PurchaseThankYouEmailInput) {
   const subject = "Thank you for your purchase - KATSEYE";
   const trackingUrl = input.trackingUrl;
-  const ordersUrl = input.ordersUrl?.trim() ? input.ordersUrl.trim() : null;
   const orderId = input.orderId ? escapeHtml(input.orderId) : null;
   const total = escapeHtml(input.total);
   const customerEmail = escapeHtml(input.customerEmail);
@@ -44,9 +43,6 @@ export function buildPurchaseThankYouEmail(input: PurchaseThankYouEmailInput) {
     "",
     "Track my order:",
     trackingUrl,
-    ordersUrl ? "" : null,
-    ordersUrl ? "View my orders:" : null,
-    ordersUrl,
   ]
     .filter(Boolean)
     .join("\n");
@@ -113,27 +109,11 @@ export function buildPurchaseThankYouEmail(input: PurchaseThankYouEmailInput) {
                   Track my order
                 </a>
               </td>
-              ${
-                ordersUrl
-                  ? `<td style="padding:0;">
-                <a href="${ordersUrl}" target="_blank" rel="noreferrer"
-                  style="display:inline-block;background:transparent;color:#f1d04b;text-decoration:none;padding:12px 18px;border-radius:14px;font-weight:900;font-size:14px;border:1px solid rgba(241,208,75,0.45);">
-                  View my orders
-                </a>
-              </td>`
-                  : ""
-              }
             </tr>
           </table>
           <p style="margin:14px 0 0 0;font-size:12px;line-height:1.6;color:rgba(240,211,79,0.72);">
             If the button doesn't work, open this link:<br/>
             <a href="${trackingUrl}" style="color:#f0d34f;word-break:break-all;">${trackingUrl}</a>
-            ${
-              ordersUrl
-                ? `<br/><br/>View your orders:<br/>
-             <a href="${ordersUrl}" style="color:#f0d34f;word-break:break-all;">${ordersUrl}</a>`
-                : ""
-            }
           </p>
           <p style="margin:14px 0 0 0;font-size:12px;line-height:1.6;color:rgba(240,211,79,0.55);">
             This email was sent to ${customerEmail}.

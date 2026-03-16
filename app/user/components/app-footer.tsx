@@ -57,18 +57,27 @@ export default function AppFooter() {
           </p>
           <div className="mt-4 space-y-3">
             <a
-              href="mailto:katseye@umgstores.com"
-              className="block text-sm text-neutral-700 transition hover:text-black dark:text-[#d6c67f] dark:hover:text-[#f7db63]"
-            >
-              katseye@umgstores.com
-            </a>
-            <a
-              href="https://shop.katseye.world/pages/contact-us"
+              href="https://mail.google.com/mail/?view=cm&fs=1&to=katseyeklothes1@gmail.com"
               target="_blank"
               rel="noreferrer"
-              className="inline-flex items-center rounded-xl bg-black px-4 py-3 text-sm font-semibold text-white transition hover:bg-neutral-800 dark:bg-[#f1d04b] dark:text-[#090909] dark:hover:bg-[#f7db63]"
+              className="flex items-center gap-2 text-sm text-neutral-700 transition hover:text-black dark:text-[#d6c67f] dark:hover:text-[#f7db63]"
             >
-              Send Message
+              <svg aria-hidden="true" viewBox="0 0 24 24" className="h-4 w-4 shrink-0" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M4 6.5C4 5.67157 4.67157 5 5.5 5H18.5C19.3284 5 20 5.67157 20 6.5V17.5C20 18.3284 19.3284 19 18.5 19H5.5C4.67157 19 4 18.3284 4 17.5V6.5Z" stroke="currentColor" strokeWidth="1.6" />
+                <path d="M6 7.5L12 12L18 7.5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+              katseyeklothes1@gmail.com
+            </a>
+            <a
+              href="https://www.facebook.com/profile.php?id=61582637374818"
+              target="_blank"
+              rel="noreferrer"
+              className="flex items-center gap-2 text-sm text-neutral-700 transition hover:text-black dark:text-[#d6c67f] dark:hover:text-[#f7db63]"
+            >
+              <svg aria-hidden="true" viewBox="0 0 24 24" className="h-4 w-4 shrink-0" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+                <path d="M22 12.06C22 6.504 17.523 2 12 2S2 6.504 2 12.06c0 5.02 3.657 9.18 8.438 9.94v-7.03H7.898v-2.91h2.54V9.845c0-2.52 1.492-3.91 3.777-3.91 1.094 0 2.238.197 2.238.197v2.47h-1.26c-1.242 0-1.63.776-1.63 1.57v1.888h2.773l-.443 2.91h-2.33V22c4.78-.76 8.437-4.92 8.437-9.94Z" />
+              </svg>
+              Katseye Klothes
             </a>
           </div>
         </div>

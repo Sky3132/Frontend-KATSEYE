@@ -5,6 +5,14 @@ import { slugifyCategoryName } from "./categories-api";
 
 export type ProductStatus = "available" | "pre-order" | "sold-out";
 
+export type ProductVariant = {
+  id: string;
+  name: string;
+  sku: string;
+  price: number | null;
+  stock: number;
+};
+
 export type Product = {
   id: string;
   backendId: string;
@@ -28,6 +36,7 @@ export type Product = {
   description: string;
   details: string[];
   sizes: string[];
+  variants?: ProductVariant[];
 };
 
 const defaultImage = "https://shop.katseye.world/cdn/shop/files/gnarly-shirt-front.png?v=1745875951&width=1000";
@@ -105,6 +114,43 @@ const normalizeVariantNames = (value: unknown) => {
     .filter(Boolean);
 };
 
+const normalizeVariants = (value: unknown): ProductVariant[] | undefined => {
+  if (!Array.isArray(value)) return undefined;
+
+  const variants = value
+    .map((item) => unwrapObject(item))
+    .filter((item): item is Record<string, unknown> => item !== null)
+    .map((variant) => {
+      const id = asString(variant.id || variant.variant_id || variant.variantId);
+      if (!id) return null;
+
+      const name = asString(variant.name || variant.title);
+      const sku = asString(variant.sku);
+      const price = asNumber(variant.price, Number.NaN);
+      const stock = Math.max(
+        0,
+        asNumber(
+          variant.stock ??
+            variant.quantity ??
+            variant.inventory_quantity ??
+            variant.inventoryQuantity,
+          0,
+        ),
+      );
+
+      return {
+        id,
+        name,
+        sku,
+        price: Number.isFinite(price) ? price : null,
+        stock,
+      } satisfies ProductVariant;
+    })
+    .filter((item): item is ProductVariant => item !== null);
+
+  return variants.length > 0 ? variants : undefined;
+};
+
 const normalizeImages = (record: Record<string, unknown>) => {
   const candidates = [
     record.image_url,
@@ -135,6 +181,7 @@ const normalizeProduct = (value: unknown): Product | null => {
   const backendId = asString(record.id || record.product_id);
   if (!backendId) return null;
 
+  const variants = normalizeVariants(record.variants);
   const stock = Math.max(0, normalizeStock(record));
   const inStockRaw = record.in_stock ?? record.inStock ?? record.available ?? record.is_available ?? record.isAvailable;
   const inStock =
@@ -197,6 +244,7 @@ const normalizeProduct = (value: unknown): Product | null => {
       ? record.details.map((item) => asString(item)).filter(Boolean)
       : [],
     sizes: sizes.length > 0 ? sizes : ["Default"],
+    variants,
   };
 };
 

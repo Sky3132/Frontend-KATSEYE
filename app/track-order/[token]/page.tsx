@@ -67,7 +67,7 @@ const statusPill = (status: string) => {
   return "bg-amber-500/15 text-amber-200 ring-amber-500/25";
 };
 
-function buildAddressLabel(payload: PublicOrderTrackingResponse) {
+function buildShippingAddressLabel(payload: PublicOrderTrackingResponse) {
   const direct =
     asString(payload.destinationAddress ?? payload.destination_address ?? "") ||
     (typeof payload.address === "string" ? payload.address : "");
@@ -76,18 +76,39 @@ function buildAddressLabel(payload: PublicOrderTrackingResponse) {
   const address = isRecord(payload.address) ? payload.address : null;
   if (!address) return "—";
 
-  const parts = [
-    asString(address.line1 ?? address.address1 ?? address.address_line1 ?? ""),
-    asString(address.line2 ?? address.address2 ?? address.address_line2 ?? ""),
-    asString(address.city ?? ""),
-    asString(address.state ?? address.province ?? ""),
-    asString(address.postal_code ?? address.zip ?? address.postalCode ?? ""),
-    asString(address.country ?? ""),
-  ]
+  const street = asString(address.street ?? address.address ?? address.line1 ?? "");
+  const barangay = asString(address.barangay ?? "");
+  const city = asString(address.city ?? "");
+  const province = asString(address.province ?? address.state ?? "");
+  const region = asString(address.region ?? "");
+  const zipCode = asString(
+    address.zip_code ?? address.postal_code ?? address.zip ?? address.postalCode ?? "",
+  );
+  const country = asString(address.country ?? "");
+
+  const parts = [street, barangay, city, province, region, zipCode, country]
     .map((part) => part.trim())
     .filter(Boolean);
 
   return parts.length > 0 ? parts.join(", ") : "—";
+}
+
+function buildCustomerName(payload: PublicOrderTrackingResponse) {
+  const address = isRecord(payload.address) ? payload.address : null;
+  return (
+    asString(address?.full_name ?? address?.fullName ?? address?.name ?? "", "")
+      .trim() || "Customer"
+  );
+}
+
+function buildCustomerContact(payload: PublicOrderTrackingResponse) {
+  const address = isRecord(payload.address) ? payload.address : null;
+  const phone = asString(
+    address?.phone_e164 ?? address?.phoneE164 ?? address?.phone ?? "",
+    "",
+  ).trim();
+  const email = asString(payload.customerEmail ?? payload.customer_email ?? "", "").trim();
+  return phone || email;
 }
 
 function buildFallbackTimeline(status: string, updatedAt?: string): TimelineEvent[] {
@@ -200,7 +221,9 @@ export default async function TrackOrderPage({
   const status = asString(data.trackerStatus ?? data.tracker_status ?? data.status ?? "pending");
   const orderDate = asString(data.orderDate ?? data.order_date ?? "");
   const customerEmail = asString(data.customerEmail ?? data.customer_email ?? "");
-  const addressLabel = buildAddressLabel(data);
+  const customerName = buildCustomerName(data);
+  const customerContact = buildCustomerContact(data);
+  const addressLabel = buildShippingAddressLabel(data);
   const lastUpdatedAt = asString(data.lastUpdatedAt ?? data.last_updated_at ?? "");
 
   const shipment = isRecord(data.shipment) ? data.shipment : null;
@@ -319,6 +342,22 @@ export default async function TrackOrderPage({
 
           <article className="rounded-[28px] border border-[#2f2a16] bg-[#0b0b0a] px-6 py-6">
             <h2 className="text-lg font-semibold">Delivery Address</h2>
+            <div className="mt-4 grid gap-4 sm:grid-cols-2">
+              <div className="rounded-2xl border border-[#2f2a16] bg-[#090909] px-4 py-4">
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#c7ba81]">
+                  Customer name
+                </p>
+                <p className="mt-2 text-sm font-semibold">{customerName || "—"}</p>
+              </div>
+              <div className="rounded-2xl border border-[#2f2a16] bg-[#090909] px-4 py-4">
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#c7ba81]">
+                  Customer contact
+                </p>
+                <p className="mt-2 break-all text-sm font-semibold">
+                  {customerContact || "—"}
+                </p>
+              </div>
+            </div>
             <p className="mt-2 whitespace-pre-wrap text-sm text-[#c7ba81]">
               {addressLabel}
             </p>

@@ -30,17 +30,33 @@ export type AccountTrackingEvent = {
   done: boolean;
 };
 
+export type AccountOrderAddress = {
+  full_name?: string;
+  phone_e164?: string;
+  email?: string;
+  street?: string;
+  barangay?: string;
+  city?: string;
+  province?: string;
+  region?: string;
+  zip_code?: string;
+  country?: string;
+};
+
 export type AccountOrder = {
   id: string;
   status: AccountOrderStatus;
   rawStatus?: string;
   shipmentStatus?: string;
+  addressId?: number;
+  addressRecord?: AccountOrderAddress | null;
   trackingNo: string;
   courier: string;
   summary: string;
   deliveryDate: string;
   customerName: string;
   contact: string;
+  phone?: string;
   address: string;
   seller: string;
   support: string;

@@ -1,14 +1,13 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useSyncExternalStore, useState } from "react";
+import { useEffect, useRef, useSyncExternalStore, useState } from "react";
 import ThemeToggle from "../components/theme-toggle";
 import { syncSessionUser } from "../lib/auth";
-import { products } from "../user/lib/products";
+import { api, unwrapList } from "../lib/api";
+import { fetchProducts, type Product } from "../user/lib/catalog-api";
+import { useStoreSettings } from "../user/lib/store-settings";
 
-const featuredProducts = products.filter((product) => product.category === "cloth").slice(0, 3);
-const bestSaleProducts = products.slice(0, 6);
-const asCurrency = (value: number) => `$${value.toFixed(2)}`;
 const THEME_EVENT = "katseye:theme";
 const THEME_STORAGE_KEY = "katseye-theme";
 
@@ -32,8 +31,13 @@ const getThemeSnapshot = () => {
 
 export default function LandingPage() {
   const router = useRouter();
+  const { formatCurrency } = useStoreSettings();
   const [role, setRole] = useState<null | "customer" | "user" | "admin">(null);
+  const [products, setProducts] = useState<Product[]>([]);
+  const [bestSellers, setBestSellers] = useState<Product[]>([]);
   const isDarkTheme = useSyncExternalStore(subscribeBrowserState, getThemeSnapshot, () => false);
+  const heroVideoRef = useRef<HTMLVideoElement | null>(null);
+  const [heroMuted, setHeroMuted] = useState(true);
 
   useEffect(() => {
     let active = true;
@@ -54,6 +58,42 @@ export default function LandingPage() {
     };
   }, []);
 
+  useEffect(() => {
+    let active = true;
+
+    const loadProducts = async () => {
+      try {
+        const next = await fetchProducts();
+        if (!active) return;
+        setProducts(next);
+      } catch {
+        if (!active) return;
+        setProducts([]);
+      }
+    };
+
+    const loadBestSellers = async () => {
+      try {
+        const response = await api("/api/products/best-sellers?limit=6");
+        const next = unwrapList(response)
+          .filter((item): item is Product => typeof item === "object" && item !== null)
+          .slice(0, 6);
+        if (!active) return;
+        setBestSellers(next);
+      } catch {
+        if (!active) return;
+        setBestSellers([]);
+      }
+    };
+
+    void loadProducts();
+    void loadBestSellers();
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
   const goToProtected = async (targetPath: string) => {
     const user = await syncSessionUser();
     if (user?.role === "admin") {
@@ -68,6 +108,8 @@ export default function LandingPage() {
   };
 
   const isSignedIn = role !== null;
+  const featuredProducts = products.filter((product) => product.category === "cloth").slice(0, 3);
+  const bestSaleProducts = bestSellers.length > 0 ? bestSellers : products.slice(0, 6);
 
   return (
     <main className="min-h-screen bg-[#f8f8f8] text-[#121212] transition-colors dark:bg-[#090909] dark:bg-[radial-gradient(circle_at_top,rgba(112,95,25,0.14),transparent_20%),linear-gradient(180deg,#080808_0%,#0c0c0b_100%)] dark:text-[#f1d04b]">
@@ -107,9 +149,10 @@ export default function LandingPage() {
 
       <section className="relative flex min-h-screen items-end overflow-hidden px-6 pb-16 pt-24">
         <video
+          ref={heroVideoRef}
           className="absolute inset-0 h-full w-full object-cover"
           autoPlay
-          muted
+          muted={heroMuted}
           loop
           playsInline
         >
@@ -119,6 +162,39 @@ export default function LandingPage() {
           />
         </video>
         <div className="absolute inset-0 bg-gradient-to-b from-black/25 via-black/35 to-black/70" />
+
+        <button
+          type="button"
+          onClick={() => {
+            const video = heroVideoRef.current;
+            const nextMuted = !heroMuted;
+            setHeroMuted(nextMuted);
+            if (video) {
+              video.muted = nextMuted;
+              if (!nextMuted) {
+                void video.play().catch(() => {});
+              }
+            }
+          }}
+          className="absolute right-6 top-24 z-10 inline-flex h-11 items-center justify-center gap-2 rounded-2xl border border-white/25 bg-black/30 px-4 text-sm font-semibold text-white backdrop-blur transition hover:bg-black/40 dark:border-[#f1d04b]/25 dark:text-[#f1d04b]"
+          aria-label={heroMuted ? "Turn on sound" : "Turn off sound"}
+          title={heroMuted ? "Sound off" : "Sound on"}
+        >
+          {heroMuted ? (
+            <svg aria-hidden="true" viewBox="0 0 24 24" className="h-4 w-4" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M11 5L6.5 9H3v6h3.5L11 19V5Z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
+              <path d="M16 9L21 15" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+              <path d="M21 9L16 15" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+            </svg>
+          ) : (
+            <svg aria-hidden="true" viewBox="0 0 24 24" className="h-4 w-4" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M11 5L6.5 9H3v6h3.5L11 19V5Z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
+              <path d="M15.5 9.5C16.4 10.4 16.4 13.6 15.5 14.5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+              <path d="M18.5 7C20 8.5 20 15.5 18.5 17" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+            </svg>
+          )}
+          {heroMuted ? "Sound off" : "Sound on"}
+        </button>
 
         <div className="relative mx-auto flex w-full max-w-[1440px] items-end justify-between gap-10">
           <div className="max-w-4xl text-white dark:text-[#f1d04b]">
@@ -177,21 +253,28 @@ export default function LandingPage() {
           {featuredProducts.map((product) => (
             <button
               key={product.id}
-              className="flex h-full flex-col overflow-hidden rounded-2xl border border-neutral-200 bg-white text-left transition hover:-translate-y-1 hover:shadow-xl dark:border-[#2f2a16] dark:bg-[#090909] dark:shadow-[0_0_0_1px_rgba(217,185,47,0.08)]"
+              className="group flex h-full flex-col overflow-hidden rounded-2xl border border-neutral-200 bg-white text-left transition hover:-translate-y-1 hover:shadow-xl dark:border-[#2f2a16] dark:bg-[#090909] dark:shadow-[0_0_0_1px_rgba(217,185,47,0.08)]"
               type="button"
               onClick={() => void goToProtected(`/user/products/product-details/${product.id}`)}
             >
               <div className="flex aspect-[4/5] w-full items-center justify-center overflow-hidden bg-[#f3f3f1] dark:bg-[#2b2b2b]">
-                <img
-                  src={product.image}
-                  alt={product.name}
-                  className="h-full w-full object-cover object-center"
-                />
+                <div className="relative h-full w-full">
+                  <img
+                    src={product.image}
+                    alt={product.name}
+                    className="absolute inset-0 h-full w-full object-cover object-center opacity-100 transition-opacity duration-200 group-hover:opacity-0"
+                  />
+                  <img
+                    src={product.gallery?.[1] ?? product.gallery?.[0] ?? product.image}
+                    alt={product.name}
+                    className="absolute inset-0 h-full w-full object-cover object-center opacity-0 transition-opacity duration-200 group-hover:opacity-100"
+                  />
+                </div>
               </div>
               <div className="flex flex-1 flex-col space-y-2 p-6">
                 <h3 className="text-4xl font-semibold">{product.name}</h3>
                 <p className="text-2xl text-neutral-500 dark:text-[#c7ba81]">{product.brand}</p>
-                <p className="text-4xl font-semibold">{asCurrency(product.price)}</p>
+                <p className="text-4xl font-semibold">{formatCurrency(product.price)}</p>
               </div>
             </button>
           ))}
@@ -206,26 +289,34 @@ export default function LandingPage() {
           {bestSaleProducts.map((product) => (
             <button
               key={product.id}
-              className="flex h-full flex-col overflow-hidden rounded-2xl border border-neutral-200 bg-white text-left transition hover:-translate-y-1 hover:shadow-xl dark:border-[#2f2a16] dark:bg-[#090909] dark:shadow-[0_0_0_1px_rgba(217,185,47,0.08)]"
+              className="group flex h-full flex-col overflow-hidden rounded-2xl border border-neutral-200 bg-white text-left transition hover:-translate-y-1 hover:shadow-xl dark:border-[#2f2a16] dark:bg-[#090909] dark:shadow-[0_0_0_1px_rgba(217,185,47,0.08)]"
               type="button"
               onClick={() => void goToProtected(`/user/products/product-details/${product.id}`)}
             >
               <div className="flex aspect-[4/5] w-full items-center justify-center overflow-hidden bg-[#f3f3f1] dark:bg-[#2b2b2b]">
-                <img
-                  src={product.image}
-                  alt={product.name}
-                  className="h-full w-full object-cover object-center"
-                />
+                <div className="relative h-full w-full">
+                  <img
+                    src={product.image}
+                    alt={product.name}
+                    className="absolute inset-0 h-full w-full object-cover object-center opacity-100 transition-opacity duration-200 group-hover:opacity-0"
+                  />
+                  <img
+                    src={product.gallery?.[1] ?? product.gallery?.[0] ?? product.image}
+                    alt={product.name}
+                    className="absolute inset-0 h-full w-full object-cover object-center opacity-0 transition-opacity duration-200 group-hover:opacity-100"
+                  />
+                </div>
               </div>
               <div className="flex flex-1 flex-col space-y-2 p-6">
                 <h3 className="text-4xl font-semibold">{product.name}</h3>
                 <p className="text-2xl text-neutral-500 dark:text-[#c7ba81]">{product.brand}</p>
-                <p className="text-4xl font-semibold">{asCurrency(product.price)}</p>
+                <p className="text-4xl font-semibold">{formatCurrency(product.price)}</p>
               </div>
             </button>
           ))}
         </div>
       </section>
+
     </main>
   );
 }

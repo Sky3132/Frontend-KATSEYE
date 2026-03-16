@@ -22,6 +22,13 @@ type ProductFormState = {
   brand: string;
   price: string;
   stock: string;
+  variants: Array<{
+    id: string;
+    name: string;
+    sku: string;
+    price: string;
+    stock: string;
+  }>;
   status: ManagedProduct["status"];
   category: ManagedProduct["category"];
   mainCategoryId: string;
@@ -169,6 +176,7 @@ const emptyForm = (): ProductFormState => ({
   brand: "KATSEYE Merch",
   price: "",
   stock: "",
+  variants: [],
   status: "available",
   category: "cloth",
   mainCategoryId: "",
@@ -186,6 +194,13 @@ const toFormState = (product: ManagedProduct): ProductFormState => ({
   brand: product.brand,
   price: String(product.price),
   stock: String(product.stock),
+  variants: (product.variants ?? []).map((variant) => ({
+    id: variant.id,
+    name: variant.name,
+    sku: variant.sku,
+    price: variant.price == null ? "" : String(variant.price),
+    stock: String(variant.stock),
+  })),
   status: product.status,
   category: product.category,
   mainCategoryId: product.mainCategoryId ?? "",
@@ -604,6 +619,15 @@ export default function ProductManagementPage() {
       ? ALBUM_VARIANT_OPTIONS
       : ACCESSORY_VARIANT_OPTIONS;
   const nonClothSelectedVariant = parseCommaList(form.sizes)[0] ?? "Default";
+  const hasVariants = form.variants.length > 0;
+  const totalVariantStock = useMemo(
+    () =>
+      form.variants.reduce(
+        (sum, variant) => sum + Number(variant.stock || 0),
+        0,
+      ),
+    [form.variants],
+  );
 
   const saveItems = (nextItems: ManagedProduct[], message: string) => {
     setItems(nextItems);
@@ -611,100 +635,117 @@ export default function ProductManagementPage() {
   };
 
   const handleSubmit = async () => {
-    const stockNumber = Number(form.stock);
-    if (!Number.isFinite(stockNumber) || stockNumber < 0) {
-      setSaveMessage("Stock must be a number greater than or equal to 0.");
-      showToast("Invalid stock value.", "error");
+    const name = form.name.trim();
+    const description = form.description.trim();
+    const primaryImage = form.image.trim();
+    const priceNumber = Number(form.price);
+
+    if (!name) {
+      setSaveMessage("Product name is required.");
+      showToast("Product name is required.", "error");
+      return;
+    }
+    if (!description) {
+      setSaveMessage("Description is required.");
+      showToast("Description is required.", "error");
+      return;
+    }
+    if (!primaryImage) {
+      setSaveMessage("At least one image is required.");
+      showToast("Image is required.", "error");
+      return;
+    }
+    if (!Number.isFinite(priceNumber) || priceNumber <= 0) {
+      setSaveMessage("Price must be a number greater than 0.");
+      showToast("Invalid price value.", "error");
       return;
     }
 
-    if (editingId) {
-      // Edit mode currently supports stock updates only.
+    const stockNumber = Number(form.stock);
+    if (!hasVariants) {
+      if (!Number.isFinite(stockNumber) || stockNumber < 0) {
+        setSaveMessage("Stock must be a number greater than or equal to 0.");
+        showToast("Invalid stock value.", "error");
+        return;
+      }
       if (!Number.isInteger(stockNumber)) {
         setSaveMessage("Stock must be a whole number.");
         showToast("Invalid stock value.", "error");
         return;
       }
-    } else {
-      const name = form.name.trim();
-      const description = form.description.trim();
-      const image = form.image.trim();
-      const priceNumber = Number(form.price);
-
-      if (!name) {
-        setSaveMessage("Product name is required.");
-        showToast("Product name is required.", "error");
-        return;
-      }
-      if (!description) {
-        setSaveMessage("Description is required.");
-        showToast("Description is required.", "error");
-        return;
-      }
-      if (!image) {
-        setSaveMessage("At least one image is required.");
-        showToast("Image is required.", "error");
-        return;
-      }
-      if (!Number.isFinite(priceNumber) || priceNumber <= 0) {
-        setSaveMessage("Price must be a number greater than 0.");
-        showToast("Invalid price value.", "error");
-        return;
-      }
-      if (
-        form.category === "cloth" &&
-        parseCommaList(form.sizes).length === 0
-      ) {
+      if (form.category === "cloth" && !editingId && parseCommaList(form.sizes).length === 0) {
         setSaveMessage("Select at least one size for cloth products.");
         showToast("Select at least one size.", "error");
         return;
+      }
+    } else {
+      for (const variant of form.variants) {
+        if (!variant.name.trim()) {
+          setSaveMessage("Variant name is required.");
+          showToast("Variant name is required.", "error");
+          return;
+        }
+        const variantStock = Number(variant.stock);
+        if (!Number.isFinite(variantStock) || variantStock < 0 || !Number.isInteger(variantStock)) {
+          setSaveMessage("Variant stock must be a whole number greater than or equal to 0.");
+          showToast("Invalid variant stock value.", "error");
+          return;
+        }
       }
     }
 
     try {
       if (editingId) {
+        const images = normalizeGallery(primaryImage, form.gallery);
         const selectedMainCategoryId = Number(form.mainCategoryId);
-        if (
-          Number.isFinite(selectedMainCategoryId) &&
-          selectedMainCategoryId > 0
-        ) {
-          if (subcategoriesLoading) {
-            setSaveMessage("Please wait for subcategories to load.");
-            showToast("Subcategories are still loading.", "error");
-            return;
-          }
-
-          const shouldSendSubcategory = subcategories.length > 0;
-          const selectedSubcategory =
-            shouldSendSubcategory && form.subcategoryId
-              ? subcategories.find((item) => item.id === form.subcategoryId) ?? null
-              : null;
-
-          if (shouldSendSubcategory && !selectedSubcategory) {
-            setSaveMessage("Select a valid subcategory for the chosen main category.");
-            showToast("Select a valid subcategory.", "error");
-            return;
-          }
-
-          await api(`/api/admin/products/${editingId}`, {
-            method: "PUT",
-            body: JSON.stringify({
-              main_category_id: selectedMainCategoryId,
-              subcategory_id: shouldSendSubcategory
-                ? Number(form.subcategoryId)
-                : null,
-            }),
-          });
+        if (!Number.isFinite(selectedMainCategoryId) || selectedMainCategoryId <= 0) {
+          setSaveMessage("Select a main category before updating the product.");
+          showToast("Select a main category.", "error");
+          return;
         }
 
-        await api(`/api/admin/products/${editingId}/stock`, {
-          method: "PATCH",
+        if (subcategoriesLoading) {
+          setSaveMessage("Please wait for subcategories to load.");
+          showToast("Subcategories are still loading.", "error");
+          return;
+        }
+
+        const shouldSendSubcategory = subcategories.length > 0;
+        const selectedSubcategory =
+          shouldSendSubcategory && form.subcategoryId
+            ? subcategories.find((item) => item.id === form.subcategoryId) ?? null
+            : null;
+
+        if (shouldSendSubcategory && !selectedSubcategory) {
+          setSaveMessage("Select a valid subcategory for the chosen main category.");
+          showToast("Select a valid subcategory.", "error");
+          return;
+        }
+
+        await api(`/api/admin/products/${editingId}`, {
+          method: "PUT",
           body: JSON.stringify({
-            stock: stockNumber,
+            title: name,
+            product_name: name,
+            description,
+            price: priceNumber,
+            stock: hasVariants ? undefined : stockNumber,
+            image_url: primaryImage,
+            images,
+            main_category_id: selectedMainCategoryId,
+            subcategory_id: shouldSendSubcategory ? Number(form.subcategoryId) : null,
+            variants: hasVariants
+              ? form.variants.map((variant) => ({
+                  variant_id: Number(variant.id),
+                  name: variant.name.trim(),
+                  sku: variant.sku.trim(),
+                  price: variant.price.trim() ? Number(variant.price) : undefined,
+                  stock: Number(variant.stock),
+                }))
+              : undefined,
           }),
         });
       } else {
-        const primaryImage = form.image.trim();
         const images = normalizeGallery(primaryImage, form.gallery);
         const selectedMainCategoryId = Number(form.mainCategoryId);
         if (
@@ -737,9 +778,10 @@ export default function ProductManagementPage() {
         await api("/api/admin/products", {
           method: "POST",
           body: JSON.stringify({
-            title: form.name.trim(),
-            description: form.description.trim(),
-            price: Number(form.price),
+            title: name,
+            product_name: name,
+            description,
+            price: priceNumber,
             stock: stockNumber,
             main_category_id: selectedMainCategoryId,
             subcategory_id: shouldSendSubcategory
@@ -754,17 +796,17 @@ export default function ProductManagementPage() {
               .map((name, index) => ({
                 name,
                 sku: `${name.replace(/\s+/g, "-").toUpperCase()}-${index + 1}`,
-                price: Number(form.price),
+                price: priceNumber,
                 stock: stockNumber,
               })),
           }),
         });
       }
       const nextItems = await fetchAdminProducts();
-      saveItems(nextItems, editingId ? "Stock updated." : "Product created.");
+      saveItems(nextItems, editingId ? "Product updated." : "Product created.");
       showToast(
         editingId
-          ? "Stock updated successfully."
+          ? "Product updated successfully."
           : "Product added successfully.",
         "success",
       );
@@ -781,6 +823,20 @@ export default function ProductManagementPage() {
       setSaveMessage(message);
       showToast(message, "error");
     }
+  };
+
+  const setVariantField = (
+    index: number,
+    key: "name" | "sku" | "price" | "stock",
+    value: string,
+  ) => {
+    setForm((prev) => {
+      const variants = [...prev.variants];
+      const current = variants[index];
+      if (!current) return prev;
+      variants[index] = { ...current, [key]: value };
+      return { ...prev, variants };
+    });
   };
 
   const archiveProduct = async (productId: string) => {
@@ -1312,7 +1368,11 @@ export default function ProductManagementPage() {
                       </button>
                       <button
                         type="button"
-                        disabled={Boolean(editingId) || item.stock <= 0}
+                        disabled={
+                          Boolean(editingId) ||
+                          item.stock <= 0 ||
+                          (item.variants?.length ?? 0) > 0
+                        }
                         onClick={async () => {
                           await api(`/api/admin/products/${item.id}/stock`, {
                             method: "PATCH",
@@ -1423,11 +1483,19 @@ export default function ProductManagementPage() {
                 type="number"
                 min="0"
                 value={form.stock}
+                disabled={hasVariants}
                 onChange={(event) => setField("stock", event.target.value)}
                 placeholder="Stock"
-                className="h-11 rounded-2xl border border-neutral-300 bg-white px-4 text-sm outline-none transition focus:border-[#111827] dark:border-[#2f2a16] dark:bg-[#080808] dark:text-[#f1d04b] dark:focus:border-[#d9b92f]"
+                className="h-11 rounded-2xl border border-neutral-300 bg-white px-4 text-sm outline-none transition focus:border-[#111827] disabled:cursor-not-allowed disabled:bg-neutral-100 dark:border-[#2f2a16] dark:bg-[#080808] dark:text-[#f1d04b] dark:focus:border-[#d9b92f] dark:disabled:bg-[#0b0b0a] dark:disabled:text-[#76683d]"
               />
             </div>
+
+            {hasVariants ? (
+              <p className="text-xs text-neutral-500 dark:text-[#c7ba81]">
+                Displayed stock is the sum of variant stocks:{" "}
+                <span className="font-semibold">{totalVariantStock}</span>
+              </p>
+            ) : null}
 
             <div className="grid gap-4 sm:grid-cols-2">
               {mainCategoriesError ? (
@@ -1608,7 +1676,59 @@ export default function ProductManagementPage() {
             />
 
             <div className="grid gap-4">
-              {isClothCategory ? (
+              {hasVariants ? (
+                <div className="rounded-2xl border border-neutral-300 bg-white px-4 py-3 text-sm dark:border-[#2f2a16] dark:bg-[#080808]">
+                  <p className="mb-3 text-xs font-medium text-neutral-600 dark:text-[#c7ba81]">
+                    Variants
+                  </p>
+                  <div className="space-y-3">
+                    {form.variants.map((variant, index) => (
+                      <div
+                        key={variant.id}
+                        className="grid gap-2 rounded-2xl border border-neutral-200 p-3 dark:border-[#2f2a16] sm:grid-cols-2"
+                      >
+                        <input
+                          value={variant.name}
+                          onChange={(event) =>
+                            setVariantField(index, "name", event.target.value)
+                          }
+                          placeholder="Variant name"
+                          className="h-10 rounded-xl border border-neutral-300 bg-white px-3 text-sm outline-none transition focus:border-[#111827] dark:border-[#2f2a16] dark:bg-[#080808] dark:text-[#f1d04b] dark:focus:border-[#d9b92f]"
+                        />
+                        <input
+                          value={variant.sku}
+                          onChange={(event) =>
+                            setVariantField(index, "sku", event.target.value)
+                          }
+                          placeholder="SKU"
+                          className="h-10 rounded-xl border border-neutral-300 bg-white px-3 text-sm outline-none transition focus:border-[#111827] dark:border-[#2f2a16] dark:bg-[#080808] dark:text-[#f1d04b] dark:focus:border-[#d9b92f]"
+                        />
+                        <input
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          value={variant.price}
+                          onChange={(event) =>
+                            setVariantField(index, "price", event.target.value)
+                          }
+                          placeholder="Price (optional)"
+                          className="h-10 rounded-xl border border-neutral-300 bg-white px-3 text-sm outline-none transition focus:border-[#111827] dark:border-[#2f2a16] dark:bg-[#080808] dark:text-[#f1d04b] dark:focus:border-[#d9b92f]"
+                        />
+                        <input
+                          type="number"
+                          min="0"
+                          value={variant.stock}
+                          onChange={(event) =>
+                            setVariantField(index, "stock", event.target.value)
+                          }
+                          placeholder="Stock"
+                          className="h-10 rounded-xl border border-neutral-300 bg-white px-3 text-sm outline-none transition focus:border-[#111827] dark:border-[#2f2a16] dark:bg-[#080808] dark:text-[#f1d04b] dark:focus:border-[#d9b92f]"
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : isClothCategory ? (
                 <div className="rounded-2xl border border-neutral-300 bg-white px-4 py-3 text-sm dark:border-[#2f2a16] dark:bg-[#080808]">
                   <p className="mb-2 text-xs font-medium text-neutral-600 dark:text-[#c7ba81]">
                     Sizes
@@ -1653,11 +1773,6 @@ export default function ProductManagementPage() {
                 <p className="text-xs font-medium text-neutral-600 dark:text-[#c7ba81]">
                   Primary image
                 </p>
-                {editingId ? (
-                  <span className="text-[11px] text-neutral-500 dark:text-[#8e7727]">
-                    Editing is stock-only
-                  </span>
-                ) : null}
               </div>
 
               <p className="mb-3 text-[11px] text-neutral-500 dark:text-[#8e7727]">
@@ -1666,7 +1781,6 @@ export default function ProductManagementPage() {
 
               <input
                 value={form.image}
-                disabled={Boolean(editingId)}
                 onChange={(event) => setPrimaryImage(event.target.value)}
                 placeholder="Primary image URL"
                 className="h-11 w-full rounded-2xl border border-neutral-300 bg-white px-4 text-sm outline-none transition focus:border-[#111827] disabled:cursor-not-allowed disabled:bg-neutral-100 dark:border-[#2f2a16] dark:bg-[#080808] dark:text-[#f1d04b] dark:focus:border-[#d9b92f] dark:disabled:bg-[#0b0b0a] dark:disabled:text-[#76683d]"
@@ -1723,7 +1837,6 @@ export default function ProductManagementPage() {
                 {form.gallery.length > 0 ? (
                   <button
                     type="button"
-                    disabled={Boolean(editingId)}
                     onClick={() => {
                       setForm((prev) => ({ ...prev, image: "", gallery: [] }));
                       setGalleryUrlDraft("");
@@ -1745,7 +1858,6 @@ export default function ProductManagementPage() {
                   <div className="flex gap-2">
                     <input
                       value={galleryUrlDraft}
-                      disabled={Boolean(editingId)}
                       onChange={(event) =>
                         setGalleryUrlDraft(event.target.value)
                       }
@@ -1754,7 +1866,7 @@ export default function ProductManagementPage() {
                     />
                     <button
                       type="button"
-                      disabled={Boolean(editingId) || !galleryUrlDraft.trim()}
+                      disabled={!galleryUrlDraft.trim()}
                       onClick={() => {
                         addGalleryImage(galleryUrlDraft);
                         setGalleryUrlDraft("");
@@ -1785,7 +1897,6 @@ export default function ProductManagementPage() {
                             />
                             <button
                               type="button"
-                              disabled={Boolean(editingId)}
                               onClick={() => removeGalleryImage(image)}
                               className="absolute right-2 top-2 grid h-7 w-7 place-items-center rounded-full bg-rose-600 text-white transition hover:bg-rose-700 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-rose-500 dark:text-white dark:hover:bg-rose-400"
                               aria-label="Remove image"
@@ -1802,7 +1913,7 @@ export default function ProductManagementPage() {
                           <div className="flex items-center justify-between gap-2 p-3">
                             <button
                               type="button"
-                              disabled={Boolean(editingId) || isPrimary}
+                              disabled={isPrimary}
                               onClick={() => setPrimaryImage(image)}
                               className="rounded-xl border border-neutral-300 px-3 py-2 text-xs font-medium disabled:cursor-not-allowed disabled:opacity-50 dark:border-[#2f2a16]"
                             >
@@ -1810,7 +1921,6 @@ export default function ProductManagementPage() {
                             </button>
                             <button
                               type="button"
-                              disabled={Boolean(editingId)}
                               onClick={() => removeGalleryImage(image)}
                               className="rounded-xl border border-neutral-300 px-3 py-2 text-xs font-medium text-rose-600 disabled:cursor-not-allowed disabled:opacity-50 dark:border-[#2f2a16] dark:text-rose-300"
                             >

@@ -1,564 +1,152 @@
 "use client";
 
-const countryOptions = [
-  "Afghanistan",
-  "Albania",
-  "Algeria",
-  "Andorra",
-  "Angola",
-  "Antigua and Barbuda",
-  "Argentina",
-  "Armenia",
-  "Australia",
-  "Austria",
-  "Azerbaijan",
-  "Bahamas",
-  "Bahrain",
-  "Bangladesh",
-  "Barbados",
-  "Belarus",
-  "Belgium",
-  "Belize",
-  "Benin",
-  "Bhutan",
-  "Bolivia",
-  "Bosnia and Herzegovina",
-  "Botswana",
-  "Brazil",
-  "Brunei",
-  "Bulgaria",
-  "Burkina Faso",
-  "Burundi",
-  "Cabo Verde",
-  "Cambodia",
-  "Cameroon",
-  "Canada",
-  "Central African Republic",
-  "Chad",
-  "Chile",
-  "China",
-  "Colombia",
-  "Comoros",
-  "Congo",
-  "Costa Rica",
-  "Croatia",
-  "Cuba",
-  "Cyprus",
-  "Czech Republic",
-  "Democratic Republic of the Congo",
-  "Denmark",
-  "Djibouti",
-  "Dominica",
-  "Dominican Republic",
-  "Ecuador",
-  "Egypt",
-  "El Salvador",
-  "Equatorial Guinea",
-  "Eritrea",
-  "Estonia",
-  "Eswatini",
-  "Ethiopia",
-  "Fiji",
-  "Finland",
-  "France",
-  "Gabon",
-  "Gambia",
-  "Georgia",
-  "Germany",
-  "Ghana",
-  "Greece",
-  "Grenada",
-  "Guatemala",
-  "Guinea",
-  "Guinea-Bissau",
-  "Guyana",
-  "Haiti",
-  "Honduras",
-  "Hungary",
-  "Iceland",
-  "India",
-  "Indonesia",
-  "Iran",
-  "Iraq",
-  "Ireland",
-  "Israel",
-  "Italy",
-  "Ivory Coast",
-  "Jamaica",
-  "Japan",
-  "Jordan",
-  "Kazakhstan",
-  "Kenya",
-  "Kiribati",
-  "Kuwait",
-  "Kyrgyzstan",
-  "Laos",
-  "Latvia",
-  "Lebanon",
-  "Lesotho",
-  "Liberia",
-  "Libya",
-  "Liechtenstein",
-  "Lithuania",
-  "Luxembourg",
-  "Madagascar",
-  "Malawi",
-  "Malaysia",
-  "Maldives",
-  "Mali",
-  "Malta",
-  "Marshall Islands",
-  "Mauritania",
-  "Mauritius",
-  "Mexico",
-  "Micronesia",
-  "Moldova",
-  "Monaco",
-  "Mongolia",
-  "Montenegro",
-  "Morocco",
-  "Mozambique",
-  "Myanmar",
-  "Namibia",
-  "Nauru",
-  "Nepal",
-  "Netherlands",
-  "New Zealand",
-  "Nicaragua",
-  "Niger",
-  "Nigeria",
-  "North Korea",
-  "North Macedonia",
-  "Norway",
-  "Oman",
-  "Pakistan",
-  "Palau",
-  "Palestine",
-  "Panama",
-  "Papua New Guinea",
-  "Paraguay",
-  "Peru",
-  "Philippines",
-  "Poland",
-  "Portugal",
-  "Qatar",
-  "Romania",
-  "Russia",
-  "Rwanda",
-  "Saint Kitts and Nevis",
-  "Saint Lucia",
-  "Saint Vincent and the Grenadines",
-  "Samoa",
-  "San Marino",
-  "Sao Tome and Principe",
-  "Saudi Arabia",
-  "Senegal",
-  "Serbia",
-  "Seychelles",
-  "Sierra Leone",
-  "Singapore",
-  "Slovakia",
-  "Slovenia",
-  "Solomon Islands",
-  "Somalia",
-  "South Africa",
-  "South Korea",
-  "South Sudan",
-  "Spain",
-  "Sri Lanka",
-  "Sudan",
-  "Suriname",
-  "Sweden",
-  "Switzerland",
-  "Syria",
-  "Taiwan",
-  "Tajikistan",
-  "Tanzania",
-  "Thailand",
-  "Timor-Leste",
-  "Togo",
-  "Tonga",
-  "Trinidad and Tobago",
-  "Tunisia",
-  "Turkey",
-  "Turkmenistan",
-  "Tuvalu",
-  "Uganda",
-  "Ukraine",
-  "United Arab Emirates",
-  "United Kingdom",
-  "United States",
-  "Uruguay",
-  "Uzbekistan",
-  "Vanuatu",
-  "Vatican City",
-  "Venezuela",
-  "Vietnam",
-  "Yemen",
-  "Zambia",
-  "Zimbabwe",
-] as const;
+import { api, asString, unwrapList, unwrapObject } from "../../lib/api";
 
-const regionOptionsByCountry: Record<string, string[]> = {
-  Philippines: [
-    "Metro Manila",
-    "North Luzon",
-    "South Luzon",
-    "Visayas",
-    "Mindanao",
-  ],
+// ─── Types ───────────────────────────────────────────────────────────────────
+
+export type LocationItem = {
+  id: string;
+  name: string;
+  type: string;
+  has_children?: boolean;
 };
 
-const provinceOptionsByRegion: Record<string, string[]> = {
-  "Metro Manila": ["Metro Manila"],
-  "North Luzon": [
-    "Abra",
-    "Apayao",
-    "Baguio",
-    "Batanes",
-    "Benguet",
-    "Bulacan",
-    "Cagayan",
-    "Ifugao",
-    "Ilocos Norte",
-    "Ilocos Sur",
-    "Isabela",
-    "Kalinga",
-    "La Union",
-    "Mountain Province",
-    "Nueva Ecija",
-    "Nueva Vizcaya",
-    "Pampanga",
-    "Pangasinan",
-    "Quirino",
-    "Tarlac",
-    "Zambales",
-  ],
-  "South Luzon": [
-    "Albay",
-    "Aurora",
-    "Batangas",
-    "Camarines Norte",
-    "Camarines Sur",
-    "Catanduanes",
-    "Cavite",
-    "Laguna",
-    "Marinduque",
-    "Masbate",
-    "Occidental Mindoro",
-    "Oriental Mindoro",
-    "Palawan",
-    "Quezon",
-    "Rizal",
-    "Romblon",
-    "Sorsogon",
-  ],
-  Visayas: [
-    "Aklan",
-    "Antique",
-    "Biliran",
-    "Bohol",
-    "Capiz",
-    "Cebu",
-    "Eastern Samar",
-    "Guimaras",
-    "Iloilo",
-    "Leyte",
-    "Negros Occidental",
-    "Negros Oriental",
-    "Northern Samar",
-    "Samar",
-    "Siquijor",
-    "Southern Leyte",
-  ],
-  Mindanao: [
-    "Agusan del Norte",
-    "Agusan del Sur",
-    "Basilan",
-    "Bukidnon",
-    "Camiguin",
-    "Cotabato",
-    "Davao de Oro",
-    "Davao del Norte",
-    "Davao del Sur",
-    "Davao Occidental",
-    "Davao Oriental",
-    "Dinagat Islands",
-    "Lanao del Norte",
-    "Lanao del Sur",
-    "Maguindanao del Norte",
-    "Maguindanao del Sur",
-    "Misamis Occidental",
-    "Misamis Oriental",
-    "Sarangani",
-    "South Cotabato",
-    "Sultan Kudarat",
-    "Sulu",
-    "Surigao del Norte",
-    "Surigao del Sur",
-    "Tawi-Tawi",
-    "Zamboanga del Norte",
-    "Zamboanga del Sur",
-    "Zamboanga Sibugay",
-  ],
+export type LocationCountry = LocationItem & {
+  country_code: string;
 };
 
-const cityOptionsByProvince: Record<string, string[]> = {
-  "Metro Manila": [
-    "Manila",
-    "Quezon City",
-    "Makati",
-    "Pasig",
-    "Taguig",
-    "Pasay",
-    "Mandaluyong",
-    "Paranaque",
-    "Las Pinas",
-    "Muntinlupa",
-    "Marikina",
-    "San Juan",
-    "Caloocan",
-    "Malabon",
-    "Navotas",
-    "Valenzuela",
-    "Pateros",
-  ],
-  "Davao del Norte": [
-    "Tagum City",
-    "Panabo City",
-    "Samal City",
-    "Asuncion",
-    "Braulio E. Dujali",
-    "Carmen",
-    "Kapalong",
-    "New Corella",
-    "San Isidro",
-    "Santo Tomas",
-    "Talaingod",
-  ],
-  "Davao de Oro": [
-    "Monkayo",
-    "Montevista",
-    "Nabunturan",
-    "New Bataan",
-    "Mabini",
-    "Maco",
-    "Maragusan",
-    "Mawab",
-    "Pantukan",
-    "Laak",
-    "Compostela",
-  ],
-  "Davao del Sur": [
-    "Digos City",
-    "Bansalan",
-    "Hagonoy",
-    "Kiblawan",
-    "Magsaysay",
-    "Malalag",
-    "Matanao",
-    "Padada",
-    "Santa Cruz",
-    "Sulop",
-  ],
-  "Davao Oriental": [
-    "Mati City",
-    "Baganga",
-    "Banaybanay",
-    "Boston",
-    "Caraga",
-    "Cateel",
-    "Governor Generoso",
-    "Lupon",
-    "Manay",
-    "San Isidro",
-    "Tarragona",
-  ],
-  Cebu: [
-    "Cebu City",
-    "Mandaue City",
-    "Lapu-Lapu City",
-    "Talisay City",
-    "Toledo City",
-    "Danao City",
-    "Carcar City",
-    "Naga City",
-    "Bogo City",
-  ],
-  Iloilo: [
-    "Iloilo City",
-    "Passi City",
-    "Miagao",
-    "Oton",
-    "Leganes",
-    "Santa Barbara",
-    "Cabatuan",
-    "Pavia",
-  ],
+export type LocationSchemaLevel = {
+  type: "region" | "province" | "city" | "district";
+  label: string;
+  required: boolean;
 };
 
-const barangayOptionsByCity: Record<string, string[]> = {
-  "Tagum City": [
-    "Apokon",
-    "Bincungan",
-    "Canocotan",
-    "La Filipina",
-    "Madaum",
-    "Magdum",
-    "Mankilam",
-    "Nueva Fuerza",
-    "Pagsabangan",
-    "San Agustin",
-    "Visayan Village",
-  ],
-  "Panabo City": [
-    "A.O. Floirendo",
-    "Datu Abdul Dadia",
-    "Gredu",
-    "J.P. Laurel",
-    "Katipunan",
-    "Little Panay",
-    "Lower Panaga",
-    "Mabunao",
-    "New Malaga",
-    "San Francisco",
-  ],
-  "Samal City": [
-    "Adecor",
-    "Anonang",
-    "Balet",
-    "Caliclic",
-    "Cogon",
-    "Libuak",
-    "Peñaplata",
-    "San Isidro",
-    "Sion",
-    "Tagbaobo",
-  ],
-  "Digos City": [
-    "Aplaya",
-    "Cogon",
-    "Dawis",
-    "Matti",
-    "Rizal",
-    "San Agustin",
-    "San Jose",
-    "Sinawilan",
-    "Tres de Mayo",
-    "Zone III",
-  ],
-  "Davao City": [
-    "Agdao",
-    "Bago Aplaya",
-    "Buhangin",
-    "Catalunan Grande",
-    "Communal",
-    "Indangan",
-    "Matina Aplaya",
-    "Mintal",
-    "Sasa",
-    "Talomo",
-    "Toril",
-  ],
-  Manila: [
-    "Barangay 1",
-    "Barangay 20",
-    "Barangay 275",
-    "Barangay 395",
-    "Ermita",
-    "Malate",
-    "Paco",
-    "Pandacan",
-    "Sampaloc",
-    "Tondo",
-  ],
-  "Quezon City": [
-    "Bagong Pag-asa",
-    "Batasan Hills",
-    "Commonwealth",
-    "Culiat",
-    "Holy Spirit",
-    "Kaligayahan",
-    "Loyola Heights",
-    "Novaliches Proper",
-    "Pasong Tamo",
-    "Tandang Sora",
-  ],
-  "Cebu City": [
-    "Apas",
-    "Bacayan",
-    "Banilad",
-    "Basak San Nicolas",
-    "Capitol Site",
-    "Kasambagan",
-    "Lahug",
-    "Mabolo",
-    "Talamban",
-    "Tisa",
-  ],
-  "Iloilo City": [
-    "Arevalo",
-    "Calumpang",
-    "City Proper",
-    "Jaro",
-    "La Paz",
-    "Lapuz",
-    "Mandurriao",
-    "Molo",
-    "San Rafael",
-    "Ungka",
-  ],
+export type LocationSchema = {
+  country_code: string;
+  levels: LocationSchemaLevel[];
 };
 
-const fallbackProvinceOptionsByCountry: Record<string, string[]> = {
-  "United States": ["California", "Texas", "New York", "Florida", "Illinois", "Washington"],
-  Canada: ["Ontario", "British Columbia", "Quebec", "Alberta", "Manitoba"],
-  Japan: ["Tokyo", "Osaka", "Kyoto", "Hokkaido", "Fukuoka"],
-  "South Korea": ["Seoul", "Busan", "Incheon", "Gyeonggi-do", "Daegu"],
-  China: ["Beijing", "Shanghai", "Guangdong", "Sichuan", "Zhejiang"],
-  India: ["Maharashtra", "Delhi", "Karnataka", "Tamil Nadu", "Telangana"],
-  Australia: ["New South Wales", "Victoria", "Queensland", "Western Australia", "South Australia"],
-  "United Kingdom": ["England", "Scotland", "Wales", "Northern Ireland"],
-};
+// ─── Normalisers ─────────────────────────────────────────────────────────────
 
-const fallbackCityOptionsByCountry: Record<string, string[]> = {
-  Philippines: ["Manila", "Quezon City", "Davao City", "Cebu City", "Tagum City"],
-  "United States": ["New York", "Los Angeles", "Chicago", "Houston", "Phoenix"],
-  Canada: ["Toronto", "Vancouver", "Montreal", "Calgary", "Ottawa"],
-  Japan: ["Tokyo", "Osaka", "Kyoto", "Yokohama", "Sapporo"],
-  "South Korea": ["Seoul", "Busan", "Incheon", "Daegu", "Daejeon"],
-  China: ["Beijing", "Shanghai", "Guangzhou", "Shenzhen", "Chengdu"],
-  India: ["Mumbai", "Delhi", "Bengaluru", "Hyderabad", "Chennai"],
-  Australia: ["Sydney", "Melbourne", "Brisbane", "Perth", "Adelaide"],
-  "United Kingdom": ["London", "Manchester", "Birmingham", "Liverpool", "Leeds"],
-};
-
-export const countries = [...countryOptions];
-
-export function getRegionOptions(country?: string) {
-  return country ? regionOptionsByCountry[country] ?? [] : [];
+function normalizeItem(raw: unknown): LocationItem | null {
+  const r = unwrapObject(raw);
+  if (!r) return null;
+  const id = asString(r.id);
+  const name = asString(r.name);
+  if (!id || !name) return null;
+  return {
+    id,
+    name,
+    type: asString(r.type),
+    has_children: Boolean(r.has_children),
+  };
 }
 
-export function getProvinceOptions(country?: string, region?: string) {
-  if (country === "Philippines" && region) {
-    return provinceOptionsByRegion[region] ?? [];
-  }
-
-  return country ? fallbackProvinceOptionsByCountry[country] ?? [] : [];
+function normalizeCountry(raw: unknown): LocationCountry | null {
+  const item = normalizeItem(raw);
+  if (!item) return null;
+  const r = unwrapObject(raw)!;
+  const country_code = asString(r.country_code || r.countryCode);
+  if (!country_code) return null;
+  // Important: frontend treats `id` as the country selector value and as the
+  // parent_id for `/locations/children`. Backend seed uses ISO code as place id.
+  // Normalize to ISO to avoid "no regions" / phone-code mismatches.
+  return { ...item, id: country_code, country_code };
 }
 
-export function getCityOptions(country?: string, _region?: string, province?: string) {
-  if (country === "Philippines" && province) {
-    return cityOptionsByProvince[province] ?? [];
-  }
+// ─── API calls ────────────────────────────────────────────────────────────────
 
-  return country ? fallbackCityOptionsByCountry[country] ?? [] : [];
+/**
+ * Fetch the list of all countries from the backend.
+ * Returns items sorted by the backend (sort_order then name).
+ */
+export async function fetchCountries(): Promise<LocationCountry[]> {
+  try {
+    const response = await api("/api/locations/countries");
+    const record = unwrapObject(response);
+    const items = unwrapList(record?.items ?? response);
+    return items
+      .map(normalizeCountry)
+      .filter((c): c is LocationCountry => c !== null);
+  } catch {
+    return [];
+  }
 }
 
-export function getBarangayOptions(country?: string, _province?: string, city?: string) {
-  if (country === "Philippines" && city) {
-    return barangayOptionsByCity[city] ?? [];
+/**
+ * Fetch the address schema (which levels are required) for a country.
+ */
+export async function fetchLocationSchema(
+  countryCode: string,
+): Promise<LocationSchema | null> {
+  if (!countryCode) return null;
+  try {
+    const response = await api(
+      `/api/locations/schema?country_code=${encodeURIComponent(countryCode)}`,
+    );
+    const record = unwrapObject(response);
+    if (!record) return null;
+    const levels = unwrapList(record.levels)
+      .map((raw) => {
+        const r = unwrapObject(raw);
+        if (!r) return null;
+        return {
+          type: asString(r.type) as LocationSchemaLevel["type"],
+          label: asString(r.label),
+          required: Boolean(r.required),
+        };
+      })
+      .filter(
+        (l): l is LocationSchemaLevel => l !== null && !!l.type && !!l.label,
+      );
+    return {
+      country_code: asString(record.country_code || record.countryCode),
+      levels,
+    };
+  } catch {
+    return null;
   }
+}
 
-  return [];
+/**
+ * Fetch the direct children of a place (e.g. regions of a country, provinces of a region).
+ */
+export async function fetchLocationChildren(
+  parentId: string,
+  type: "region" | "province" | "city" | "district",
+): Promise<LocationItem[]> {
+  if (!parentId || !type) return [];
+  try {
+    const url = `/api/locations/children?parent_id=${encodeURIComponent(parentId)}&type=${encodeURIComponent(type)}`;
+    const response = await api(url);
+    const record = unwrapObject(response);
+    const items = unwrapList(record?.items ?? response);
+    return items
+      .map(normalizeItem)
+      .filter((i): i is LocationItem => i !== null);
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Search places by name within a country.
+ */
+export async function searchLocations(
+  countryCode: string,
+  type: "region" | "province" | "city" | "district",
+  q: string,
+): Promise<LocationItem[]> {
+  if (!countryCode || !type || !q.trim()) return [];
+  try {
+    const url = `/api/locations/search?country_code=${encodeURIComponent(countryCode)}&type=${encodeURIComponent(type)}&q=${encodeURIComponent(q.trim())}`;
+    const response = await api(url);
+    const record = unwrapObject(response);
+    const items = unwrapList(record?.items ?? response);
+    return items
+      .map(normalizeItem)
+      .filter((i): i is LocationItem => i !== null);
+  } catch {
+    return [];
+  }
 }
