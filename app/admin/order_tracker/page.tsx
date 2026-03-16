@@ -364,6 +364,11 @@ const normalizeAddressLines = (address: Record<string, unknown> | null) => {
   return parts.length > 0 ? parts : [];
 };
 
+const normalizeAddressName = (address: Record<string, unknown> | null) => {
+  if (!address) return "";
+  return asString(address.full_name ?? address.fullName ?? address.name ?? "", "").trim();
+};
+
 const normalizeOrderDetail = (
   value: unknown,
   fallbackId: string,
@@ -423,7 +428,9 @@ const normalizeOrderDetail = (
     status: asString(record.status ?? record.payment_status ?? ""),
     paymentMethod: asString(record.payment_method ?? record.paymentMethod ?? ""),
     totalAmount: asNumber(record.total_amount ?? record.totalAmount, 0),
-    userName: asString(user?.name ?? record.user_name ?? record.userName ?? ""),
+    userName:
+      normalizeAddressName(address) ||
+      asString(user?.name ?? record.user_name ?? record.userName ?? ""),
     userEmail: asString(
       user?.email ?? record.user_email ?? record.userEmail ?? "",
     ),
