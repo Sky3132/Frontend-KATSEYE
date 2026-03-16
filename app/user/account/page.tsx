@@ -672,53 +672,64 @@ export default function AccountPage() {
     };
   }, [shipping.country_id]);
 
-  // Region → provinces
+  // Region → provinces (if used) OR cities (if no province level)
   useEffect(() => {
-    if (!shipping.region_id) return;
+    if (!shipping.region_id || !schema) return;
     let cancelled = false;
-    setProvincesLoading(true);
+
+    setProvinces([]);
     setCities([]);
     setDistricts([]);
-    fetchLocationChildren(shipping.region_id, "province").then((items) => {
-      if (cancelled) return;
-      setProvinces(items);
+    setCitiesLoading(false);
+    setDistrictsLoading(false);
+
+    if (schemaLevelTypes.has("province")) {
+      setProvincesLoading(true);
+      setCitiesLoading(false);
+      fetchLocationChildren(shipping.region_id, "province").then((items) => {
+        if (cancelled) return;
+        setProvinces(items);
+        setProvincesLoading(false);
+      });
+    } else {
       setProvincesLoading(false);
-    });
+      setProvinces([]);
+      setCitiesLoading(true);
+      fetchLocationChildren(shipping.region_id, "city").then((items) => {
+        if (cancelled) return;
+        setCities(items);
+        setCitiesLoading(false);
+      });
+    }
     return () => {
       cancelled = true;
     };
-  }, [shipping.region_id]);
+  }, [schema, schemaLevelTypes, shipping.region_id]);
 
   // Province → cities
   useEffect(() => {
-    if (!shipping.province_id) return;
+    if (!shipping.province_id || !schema) return;
     let cancelled = false;
     setCitiesLoading(true);
     setDistricts([]);
-    fetchLocationChildren(shipping.province_id, "city").then(async (items) => {
+    fetchLocationChildren(shipping.province_id, "city").then((items) => {
       if (cancelled) return;
-      if (items.length === 0 && shipping.region_id) {
-        const fallback = await fetchLocationChildren(
-          shipping.region_id,
-          "city",
-        );
-        if (!cancelled) {
-          setCities(fallback);
-          setCitiesLoading(false);
-        }
-      } else {
-        setCities(items);
-        setCitiesLoading(false);
-      }
+      setCities(items);
+      setCitiesLoading(false);
     });
     return () => {
       cancelled = true;
     };
-  }, [shipping.province_id, shipping.region_id]);
+  }, [schema, shipping.province_id]);
 
   // City → districts
   useEffect(() => {
-    if (!shipping.city_id) return;
+    if (!shipping.city_id || !schema) return;
+    if (!schemaLevelTypes.has("district")) {
+      setDistricts([]);
+      setDistrictsLoading(false);
+      return;
+    }
     let cancelled = false;
     setDistrictsLoading(true);
     fetchLocationChildren(shipping.city_id, "district").then((items) => {
@@ -729,7 +740,7 @@ export default function AccountPage() {
     return () => {
       cancelled = true;
     };
-  }, [shipping.city_id]);
+  }, [schema, schemaLevelTypes, shipping.city_id]);
 
 
   const section =
@@ -982,6 +993,11 @@ export default function AccountPage() {
   const saveAddress = async () => {
     setAddressesError("");
     try {
+      if (schemaLevelTypes.has("city") && !shipping.city_id) {
+        setAddressesError("Please select a city.");
+        return;
+      }
+
       const payload: CreateAddressInput = {
         full_name: shipping.fullName.trim(),
         email: shipping.email.trim(),
@@ -989,10 +1005,16 @@ export default function AccountPage() {
         zip_code: shipping.postalCode.trim(),
         street: shipping.address.trim(),
         country_code: shipping.country_id,
-        region_id: shipping.region_id || undefined,
-        province_id: shipping.province_id || undefined,
-        city_id: shipping.city_id || undefined,
-        district_id: shipping.district_id || undefined,
+        region_id: schemaLevelTypes.has("region")
+          ? shipping.region_id || undefined
+          : undefined,
+        province_id: schemaLevelTypes.has("province")
+          ? shipping.province_id || undefined
+          : undefined,
+        city_id: schemaLevelTypes.has("city") ? shipping.city_id : undefined,
+        district_id: schemaLevelTypes.has("district")
+          ? shipping.district_id || undefined
+          : undefined,
         is_default: addressDefaultDraft || undefined,
       };
       if (editingAddressId && editingAddressId !== "new") {
