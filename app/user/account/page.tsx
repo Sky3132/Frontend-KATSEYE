@@ -629,14 +629,18 @@ export default function AccountPage() {
   const [districts, setDistricts] = useState<LocationItem[]>([]);
   const [districtsLoading, setDistrictsLoading] = useState(false);
 
+  const isPhilippines = shipping.country_id?.toUpperCase() === "PH";
+
   const schemaLevelTypes = useMemo(
     () => new Set(schema?.levels.map((l) => l.type) ?? []),
     [schema],
   );
+  const wantsProvinceLevel = schemaLevelTypes.has("province") || isPhilippines;
+  const wantsDistrictLevel = schemaLevelTypes.has("district") || isPhilippines;
   const showRegion = schemaLevelTypes.has("region") || regions.length > 0;
-  const showProvince = schemaLevelTypes.has("province") || provinces.length > 0;
+  const showProvince = wantsProvinceLevel || provinces.length > 0;
   const showCity = schemaLevelTypes.has("city") || cities.length > 0;
-  const showDistrict = schemaLevelTypes.has("district") || districts.length > 0;
+  const showDistrict = wantsDistrictLevel || districts.length > 0;
 
   // Load countries once
   useEffect(() => {
@@ -683,7 +687,7 @@ export default function AccountPage() {
     setCitiesLoading(false);
     setDistrictsLoading(false);
 
-    if (schemaLevelTypes.has("province")) {
+    if (wantsProvinceLevel) {
       setProvincesLoading(true);
       setCitiesLoading(false);
       fetchLocationChildren(shipping.region_id, "province").then((items) => {
@@ -704,7 +708,7 @@ export default function AccountPage() {
     return () => {
       cancelled = true;
     };
-  }, [schema, schemaLevelTypes, shipping.region_id]);
+  }, [schema, shipping.region_id, wantsProvinceLevel]);
 
   // Province → cities
   useEffect(() => {
@@ -725,7 +729,7 @@ export default function AccountPage() {
   // City → districts
   useEffect(() => {
     if (!shipping.city_id || !schema) return;
-    if (!schemaLevelTypes.has("district")) {
+    if (!wantsDistrictLevel) {
       setDistricts([]);
       setDistrictsLoading(false);
       return;
@@ -740,7 +744,7 @@ export default function AccountPage() {
     return () => {
       cancelled = true;
     };
-  }, [schema, schemaLevelTypes, shipping.city_id]);
+  }, [schema, shipping.city_id, wantsDistrictLevel]);
 
 
   const section =
