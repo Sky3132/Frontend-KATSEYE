@@ -637,9 +637,10 @@ export default function AccountPage() {
   );
   const wantsProvinceLevel = schemaLevelTypes.has("province") || isPhilippines;
   const wantsDistrictLevel = schemaLevelTypes.has("district") || isPhilippines;
+  const wantsCityLevel = schemaLevelTypes.has("city") || isPhilippines;
   const showRegion = schemaLevelTypes.has("region") || regions.length > 0;
   const showProvince = wantsProvinceLevel || provinces.length > 0;
-  const showCity = schemaLevelTypes.has("city") || cities.length > 0;
+  const showCity = wantsCityLevel || cities.length > 0;
   const showDistrict = wantsDistrictLevel || districts.length > 0;
 
   // Load countries once
@@ -997,7 +998,7 @@ export default function AccountPage() {
   const saveAddress = async () => {
     setAddressesError("");
     try {
-      if (schemaLevelTypes.has("city") && !shipping.city_id) {
+      if (showCity && !shipping.city_id) {
         setAddressesError("Please select a city.");
         return;
       }
@@ -1009,16 +1010,10 @@ export default function AccountPage() {
         zip_code: shipping.postalCode.trim(),
         street: shipping.address.trim(),
         country_code: shipping.country_id,
-        region_id: schemaLevelTypes.has("region")
-          ? shipping.region_id || undefined
-          : undefined,
-        province_id: schemaLevelTypes.has("province")
-          ? shipping.province_id || undefined
-          : undefined,
-        city_id: schemaLevelTypes.has("city") ? shipping.city_id : undefined,
-        district_id: schemaLevelTypes.has("district")
-          ? shipping.district_id || undefined
-          : undefined,
+        region_id: shipping.region_id || undefined,
+        province_id: shipping.province_id || undefined,
+        city_id: shipping.city_id || undefined,
+        district_id: shipping.district_id || undefined,
         is_default: addressDefaultDraft || undefined,
       };
       if (editingAddressId && editingAddressId !== "new") {
